@@ -1,0 +1,21 @@
+# Environment
+.env
+
+# Go
+services/api/bin/
+services/api/*.exe
+
+# Node
+services/frontend/node_modules/
+services/frontend/.next/
+
+# Python
+services/scraper/__pycache__/
+services/scraper/*.pyc
+services/scraper/.venv/
+
+# Docker
+*.log
+
+# OS
+.DS_Store

@@ -1,0 +1,98 @@
+services:
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - ENV=development
+      - PORT=8080
+      - DATABASE_URL=postgres://enavu:enavu@postgres:5432/enavu_hub?sslmode=disable
+      - REDIS_URL=redis://redis:6379
+      - HA_URL=${HA_URL:-https://hotel89408.com}
+      - HA_TOKEN=${HA_TOKEN}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - INSTAGRAM_ACCESS_TOKEN=${INSTAGRAM_ACCESS_TOKEN}
+      - INSTAGRAM_USER_ID=${INSTAGRAM_USER_ID}
+      - SCRAPER_URL=http://scraper:8001
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-prod}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      scraper:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - enavu-net
+
+  scraper:
+    build:
+      context: ./services/scraper
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - CYCLEBAR_USERNAME=${CYCLEBAR_USERNAME}
+      - CYCLEBAR_PASSWORD=${CYCLEBAR_PASSWORD}
+    restart: unless-stopped
+    networks:
+      - enavu-net
+
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - API_URL=http://api:8080
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+      - NEXT_PUBLIC_WS_URL=ws://localhost:8080
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - enavu-net
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: enavu_hub
+      POSTGRES_USER: enavu
+      POSTGRES_PASSWORD: enavu
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U enavu -d enavu_hub"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - enavu-net
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - enavu-net
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  enavu-net:
+    driver: bridge
