@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { api } from '@/lib/api'
 import { Flame, Clock, Trophy, TrendingUp, Home, CheckCircle, AlertCircle } from 'lucide-react'
 

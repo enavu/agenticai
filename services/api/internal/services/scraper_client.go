@@ -36,7 +36,7 @@ func NewScraperClient(baseURL string) *ScraperClient {
 	return &ScraperClient{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		httpClient: &http.Client{
-			Timeout: 120 * time.Second, // scraping takes time
+			Timeout: 180 * time.Second, // scraping takes time
 		},
 	}
 }

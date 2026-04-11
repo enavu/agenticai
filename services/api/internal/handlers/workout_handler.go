@@ -41,7 +41,7 @@ func (h *WorkoutHandler) List(c *gin.Context) {
 }
 
 func (h *WorkoutHandler) Sync(c *gin.Context) {
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 150*time.Second)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 300*time.Second)
 	defer cancel()
 
 	result, err := h.scraper.ScrapeWorkouts(ctx)

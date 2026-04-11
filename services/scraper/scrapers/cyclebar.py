@@ -1,27 +1,18 @@
 """Cyclebar workout history scraper using Playwright."""
 
-import os
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional
 from playwright.async_api import async_playwright, Page, TimeoutError as PlaywrightTimeout
 
 logger = logging.getLogger(__name__)
 
 CYCLEBAR_LOGIN_URL = "https://members.cyclebar.com/auth/login"
-CYCLEBAR_HISTORY_URLS = [
-    "https://members.cyclebar.com/profile/history",
-    "https://members.cyclebar.com/profile/class-history",
-    "https://members.cyclebar.com/profile",
-    "https://members.cyclebar.com/my-account/class-history",
-    "https://members.cyclebar.com/my-account",
-]
 
 
 async def scrape_workouts(username: str, password: str) -> list[dict]:
     """
-    Log in to Cyclebar and scrape workout history.
+    Log in to Cyclebar and scrape workout history from the Attendance tab.
     Returns a list of workout dicts.
     """
     async with async_playwright() as p:
@@ -38,7 +29,6 @@ async def scrape_workouts(username: str, password: str) -> list[dict]:
             viewport={"width": 1280, "height": 800},
         )
         page = await context.new_page()
-
         try:
             workouts = await _do_scrape(page, username, password)
             return workouts
@@ -62,206 +52,119 @@ async def _do_scrape(page: Page, username: str, password: str) -> list[dict]:
     await page.fill("input[type='password']", password)
     await page.click("button[type='submit'], button:has-text('Sign In'), button:has-text('Log In')")
 
-    # Wait for redirect after login
+    # Wait for redirect after login — Cyclebar lands on the home dashboard
     try:
-        await page.wait_for_url("**/profile**", timeout=15_000)
+        await page.wait_for_url("https://members.cyclebar.com/**", timeout=15_000)
+        if "login" in page.url or "auth" in page.url:
+            raise Exception("Still on login page after submit")
+    except Exception:
+        await page.wait_for_selector("nav", timeout=10_000)
+
+    logger.info(f"Logged in, at: {page.url}")
+
+    # Navigate to history, then click ATTENDANCE tab
+    await page.goto("https://members.cyclebar.com/history", wait_until="domcontentloaded", timeout=30_000)
+    # Wait for nav to be ready (page shell)
+    await page.wait_for_selector("nav", timeout=10_000)
+    logger.info(f"History page URL: {page.url}")
+
+    try:
+        att_link = page.locator("a:has-text('ATTENDANCE'), a:has-text('Attendance')")
+        await att_link.first.wait_for(timeout=10_000)
+        await att_link.first.click()
+        await asyncio.sleep(2)  # let the tab content start loading
+        logger.info(f"On ATTENDANCE tab: {page.url}")
+    except Exception as e:
+        logger.warning(f"Could not click ATTENDANCE tab: {e}")
+
+    # Wait for the attendance table to appear
+    try:
+        await page.wait_for_selector("tbody.rows-in tr, tr.no-animate", timeout=20_000)
     except PlaywrightTimeout:
-        try:
-            await page.wait_for_url("**/dashboard**", timeout=10_000)
-        except PlaywrightTimeout:
-            await page.wait_for_selector("[class*='profile'], [class*='dashboard'], nav", timeout=10_000)
+        logger.warning("Attendance table not found within timeout")
 
-    logger.info("Logged in, finding class history page")
-    for url in CYCLEBAR_HISTORY_URLS:
-        await page.goto(url, wait_until="networkidle", timeout=20_000)
-        current = page.url
-        logger.info(f"Tried {url} → landed on {current}")
-        # If we got redirected back to login, try next
-        if "login" in current or "auth" in current:
-            continue
-        # Check if page has any ride/class history content
-        body = await page.inner_text("body")
-        if any(kw in body.lower() for kw in ["class history", "past classes", "completed", "ride", "performance", "classic"]):
-            logger.info(f"Found history content at {current}")
-            break
-    logger.info(f"Scraping history from: {page.url}")
-
-    # Scroll to load all content
+    # Scroll to load all rows (infinite scroll or lazy load)
     await _scroll_to_bottom(page)
 
-    workouts = await _parse_workouts(page)
+    workouts = await _parse_attendance_table(page)
     logger.info(f"Scraped {len(workouts)} workouts")
     return workouts
 
 
-async def _scroll_to_bottom(page: Page, max_scrolls: int = 20) -> None:
+async def _scroll_to_bottom(page: Page, max_scrolls: int = 30) -> None:
     for _ in range(max_scrolls):
         prev_height = await page.evaluate("document.body.scrollHeight")
         await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(1.2)
         new_height = await page.evaluate("document.body.scrollHeight")
         if new_height == prev_height:
             break
 
-    # Also click "Load More" buttons if present
-    for _ in range(10):
-        try:
-            btn = page.locator("button:has-text('Load More'), button:has-text('Show More')")
-            if await btn.count() > 0:
-                await btn.first.click()
-                await asyncio.sleep(1.5)
-            else:
-                break
-        except Exception:
-            break
 
-
-async def _parse_workouts(page: Page) -> list[dict]:
+async def _parse_attendance_table(page: Page) -> list[dict]:
     """
-    Parse workout cards from the page.
-    Cyclebar's markup may vary — this targets common patterns and falls back gracefully.
+    Parse the LOHI RIDE ATTENDANCE table using a single JS evaluation
+    to avoid thousands of slow Playwright IPC calls.
     """
-    workouts = []
+    # Extract all row data in one JS call
+    rows_data = await page.evaluate("""
+        () => {
+            const rows = document.querySelectorAll('tbody.rows-in tr, tr.no-animate');
+            return Array.from(rows).map(row => {
+                const tds = row.querySelectorAll('td');
+                if (tds.length < 6) return null;
 
-    # Strategy 1: Look for class history rows / cards
-    selectors_to_try = [
-        "[class*='class-history'] [class*='row']",
-        "[class*='ClassHistory'] li",
-        "[data-testid*='class-item']",
-        "[class*='workout-item']",
-        ".history-item",
-        "tr[class*='class']",
-    ]
+                const classCell = tds[2];
+                const strong = classCell.querySelector('strong');
+                const subDiv = classCell.querySelector('div');
+                const className = strong ? strong.innerText.trim() : '';
+                const subtype = subDiv ? subDiv.innerText.trim() : '';
 
-    rows = None
-    for selector in selectors_to_try:
-        try:
-            count = await page.locator(selector).count()
-            if count > 0:
-                rows = page.locator(selector)
-                logger.info(f"Found {count} rows with selector: {selector}")
-                break
-        except Exception:
-            continue
+                const calsEl = tds[3].querySelector('h5.text-primary');
+                const cals = calsEl ? calsEl.innerText.trim() : null;
 
-    if rows is None:
-        # Fallback: grab all text and do best-effort parse
-        logger.warning("Could not find structured workout rows, using fallback text parse")
-        return await _fallback_parse(page)
+                return {
+                    date: tds[0].innerText.trim(),
+                    time: tds[1].innerText.trim(),
+                    class_name: subtype ? className + ' — ' + subtype : className,
+                    cals: cals,
+                    studio: tds[5].innerText.trim(),
+                    instructor: tds[6].innerText.trim(),
+                };
+            }).filter(r => r !== null && r.class_name);
+        }
+    """)
 
-    count = await rows.count()
-    for i in range(count):
-        row = rows.nth(i)
-        try:
-            workout = await _parse_row(row)
-            if workout:
-                workouts.append(workout)
-        except Exception as e:
-            logger.debug(f"Skip row {i}: {e}")
-            continue
-
-    return workouts
-
-
-async def _parse_row(row) -> Optional[dict]:
-    """Extract workout data from a single row/card element."""
-    text = await row.inner_text()
-    if not text.strip():
-        return None
-
-    workout = {
-        "class_name": "",
-        "instructor": "",
-        "studio": "",
-        "class_date": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
-        "duration_minutes": 45,
-        "cals_burned": None,
-        "avg_output": None,
-        "total_output": None,
-        "rank": None,
-    }
-
-    # Try to get structured data from attributes
-    lines = [l.strip() for l in text.split("\n") if l.strip()]
-
-    for line in lines:
-        lower = line.lower()
-        # Date patterns
-        for fmt in ["%B %d, %Y", "%m/%d/%Y", "%Y-%m-%d"]:
-            try:
-                dt = datetime.strptime(line, fmt)
-                workout["class_date"] = dt.strftime("%Y-%m-%dT%H:%M:%S")
-                break
-            except ValueError:
-                pass
-
-        if "instructor" in lower or "with " in lower:
-            workout["instructor"] = line.replace("Instructor:", "").replace("With ", "").strip()
-
-        if "studio" in lower or "location" in lower:
-            workout["studio"] = line.replace("Studio:", "").replace("Location:", "").strip()
-
-        if "cal" in lower:
-            import re
-            nums = re.findall(r"\d+", line)
-            if nums:
-                workout["cals_burned"] = int(nums[0])
-
-        if "output" in lower:
-            import re
-            nums = re.findall(r"\d+", line)
-            if nums:
-                workout["avg_output"] = int(nums[0])
-
-        if "rank" in lower:
-            workout["rank"] = line
-
-        if "min" in lower:
-            import re
-            nums = re.findall(r"\d+", line)
-            if nums:
-                workout["duration_minutes"] = int(nums[0])
-
-    # If class_name is still empty, use first non-date line
-    if not workout["class_name"] and lines:
-        workout["class_name"] = lines[0]
-
-    return workout if workout["class_name"] else None
-
-
-async def _fallback_parse(page: Page) -> list[dict]:
-    """Last-resort text extraction — returns minimal workout records."""
-    import re
-    text = await page.inner_text("body")
-
-    # Look for date patterns to delineate workouts
-    date_pattern = re.compile(
-        r"(January|February|March|April|May|June|July|August|September|October|November|December)"
-        r"\s+\d{1,2},\s+\d{4}"
-    )
+    logger.info(f"Found {len(rows_data)} attendance rows")
 
     workouts = []
-    matches = list(date_pattern.finditer(text))
-
-    for i, match in enumerate(matches):
-        start = match.start()
-        end = matches[i + 1].start() if i + 1 < len(matches) else start + 300
-        snippet = text[start:end].strip()
-
+    for r in rows_data:
         try:
-            dt = datetime.strptime(match.group(), "%B %d, %Y")
             workouts.append({
-                "class_name": "Cyclebar Ride",
-                "instructor": "",
-                "studio": "",
-                "class_date": dt.strftime("%Y-%m-%dT%H:%M:%S"),
+                "class_name": r["class_name"],
+                "instructor": r["instructor"],
+                "studio": r["studio"],
+                "class_date": _parse_datetime(r["date"], r["time"]),
                 "duration_minutes": 45,
-                "cals_burned": None,
+                "cals_burned": int(r["cals"]) if r.get("cals") and r["cals"].isdigit() else None,
                 "avg_output": None,
                 "total_output": None,
                 "rank": None,
             })
-        except ValueError:
-            continue
-
+        except Exception as e:
+            logger.debug(f"Skip row: {e}")
     return workouts
+
+
+def _parse_datetime(date_str: str, time_str: str) -> str:
+    """Parse '04/10/2026' + '12:30pm' → '2026-04-10T12:30:00'"""
+    try:
+        dt = datetime.strptime(f"{date_str} {time_str}", "%m/%d/%Y %I:%M%p")
+        return dt.strftime("%Y-%m-%dT%H:%M:%S")
+    except ValueError:
+        pass
+    try:
+        dt = datetime.strptime(date_str, "%m/%d/%Y")
+        return dt.strftime("%Y-%m-%dT%H:%M:%S")
+    except ValueError:
+        return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")

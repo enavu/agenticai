@@ -4,6 +4,7 @@ export const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080'
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     headers: { 'Content-Type': 'application/json' },
+    cache: 'no-store',
     ...options,
   })
   if (!res.ok) {
