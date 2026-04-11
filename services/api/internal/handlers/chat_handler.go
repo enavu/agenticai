@@ -31,12 +31,13 @@ func NewChatHandler(hub *inws.Hub, haAgent *agent.HAAgent, s *store.Store) *Chat
 }
 
 type wsMessage struct {
-	Type           string `json:"type"`
-	Content        string `json:"content"`
-	ConversationID string `json:"conversation_id,omitempty"`
-	AgentRunID     string `json:"agent_run_id,omitempty"`
-	StepIndex      int    `json:"step_index,omitempty"`
-	StepType       string `json:"step_type,omitempty"`
+	Type           string  `json:"type"`
+	Content        string  `json:"content"`
+	ConversationID string  `json:"conversation_id,omitempty"`
+	AgentRunID     string  `json:"agent_run_id,omitempty"`
+	StepIndex      int     `json:"step_index,omitempty"`
+	StepType       string  `json:"step_type,omitempty"`
+	ToolName       *string `json:"tool_name,omitempty"`
 }
 
 func (h *ChatHandler) Handle(c *gin.Context) {
@@ -99,6 +100,7 @@ func (h *ChatHandler) Handle(c *gin.Context) {
 				StepIndex:  lastStep.Index,
 				StepType:   lastStep.Type,
 				Content:    lastStep.Content,
+				ToolName:   lastStep.ToolName,
 			})
 			client.Send(stepMsg)
 		})

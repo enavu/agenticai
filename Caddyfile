@@ -1,0 +1,20 @@
+enavu.io {
+    # WebSocket upgrade for chat
+    handle /ws/* {
+        reverse_proxy api:8080
+    }
+
+    # API routes
+    handle /api/* {
+        reverse_proxy api:8080
+    }
+
+    handle /health {
+        reverse_proxy api:8080
+    }
+
+    # Everything else → Next.js frontend
+    handle {
+        reverse_proxy frontend:3000
+    }
+}

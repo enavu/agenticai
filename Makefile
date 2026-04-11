@@ -1,4 +1,4 @@
-.PHONY: help dev build test clean logs ps
+.PHONY: help dev prod build test clean logs ps
 
 # Rancher Desktop ships `docker compose` (plugin); fall back to `docker-compose`
 DOCKER := $(shell command -v docker 2>/dev/null || echo $(HOME)/.rd/bin/docker)
@@ -99,3 +99,20 @@ clean: ## Remove build artifacts
 
 build: ## Build all Docker images
 	$(DOCKER_COMPOSE) build
+
+# ─── Production ───────────────────────────────────────────────────────────────
+
+DOCKER_COMPOSE_PROD := $(DOCKER_COMPOSE) -f docker-compose.prod.yml
+
+prod: ## Start in production mode (Caddy + SSL)
+	$(DOCKER_COMPOSE_PROD) up --build -d
+
+prod-stop: ## Stop production services
+	$(DOCKER_COMPOSE_PROD) down
+
+prod-logs: ## Tail production logs
+	$(DOCKER_COMPOSE_PROD) logs -f
+
+prod-rebuild: ## Rebuild and redeploy (use after git pull)
+	$(DOCKER_COMPOSE_PROD) build --no-cache frontend api scraper
+	$(DOCKER_COMPOSE_PROD) up -d
