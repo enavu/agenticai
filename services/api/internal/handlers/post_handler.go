@@ -28,8 +28,13 @@ func (h *PostHandler) List(c *gin.Context) {
 }
 
 func (h *PostHandler) Generate(c *gin.Context) {
+	var body struct {
+		ImageURL string `json:"image_url"`
+	}
+	c.ShouldBindJSON(&body)
+
 	// Run the content agent synchronously (can take 30-60s)
-	run, err := h.contentAgent.Run(c.Request.Context(), nil)
+	run, err := h.contentAgent.Run(c.Request.Context(), body.ImageURL, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":       err.Error(),

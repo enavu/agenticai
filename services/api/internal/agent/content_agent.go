@@ -9,19 +9,20 @@ import (
 	"enavu-hub/api/internal/store"
 )
 
-const contentSystemPrompt = `You are a fitness content agent that creates and posts Instagram content
+const contentSystemPrompt = `You are a fitness content agent that creates Instagram content
 from recent Cyclebar workout data.
 
 Your workflow:
 1. Use get_recent_workouts to fetch the latest 3-5 workouts
 2. Use generate_image_caption to create an engaging caption from the workout data
-3. Use post_to_instagram to publish the caption
+3. If an image URL is provided in the input, call post_to_instagram with the caption and that image URL.
+   If no image URL is provided, just report the generated caption — do NOT call post_to_instagram.
 
 Guidelines:
-- Only post if there are workouts in the last 7 days
+- Only generate content if there are workouts in the last 7 days
 - Captions should feel authentic and personal, not generic
 - Include relevant fitness hashtags (#cyclebar #spinning #fitness #indoorcycling)
-- Report what was posted in your final message`
+- Always report the final caption in your response`
 
 type ContentAgent struct {
 	orchestrator *Orchestrator
@@ -42,7 +43,10 @@ func NewContentAgent(
 	}
 }
 
-func (a *ContentAgent) Run(ctx context.Context, callback StepCallback) (*models.AgentRun, error) {
-	input := "Create and post an Instagram update about my recent Cyclebar workouts."
+func (a *ContentAgent) Run(ctx context.Context, imageURL string, callback StepCallback) (*models.AgentRun, error) {
+	input := "Create an Instagram update about my recent Cyclebar workouts."
+	if imageURL != "" {
+		input += " Image URL for the post: " + imageURL
+	}
 	return a.orchestrator.Run(ctx, models.AgentTypeContent, contentSystemPrompt, input, callback)
 }
