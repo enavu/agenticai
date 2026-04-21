@@ -6,15 +6,19 @@ import (
 )
 
 type Config struct {
-	Env         string
-	Port        string
-	DatabaseURL string
-	RedisURL    string
-	HA          HAConfig
-	Anthropic   AnthropicConfig
-	Instagram   InstagramConfig
-	ScraperURL  string
-	JWTSecret   string
+	Env           string
+	Port          string
+	DatabaseURL   string
+	RedisURL      string
+	HA            HAConfig
+	Anthropic     AnthropicConfig
+	Instagram     InstagramConfig
+	ScraperURL    string
+	JWTSecret     string
+	AdminEmail    string
+	AdminPassword string
+	SiteURL       string
+	UploadDir     string
 }
 
 type HAConfig struct {
@@ -50,8 +54,12 @@ func Load() *Config {
 			AccessToken: getEnv("INSTAGRAM_ACCESS_TOKEN", ""),
 			UserID:      getEnv("INSTAGRAM_USER_ID", ""),
 		},
-		ScraperURL: getEnv("SCRAPER_URL", "http://localhost:8001"),
-		JWTSecret:  getEnv("JWT_SECRET", "dev-secret"),
+		ScraperURL:    getEnv("SCRAPER_URL", "http://localhost:8001"),
+		JWTSecret:     getEnv("JWT_SECRET", "dev-secret"),
+		AdminEmail:    getEnv("ADMIN_EMAIL", ""),
+		AdminPassword: getEnv("ADMIN_PASSWORD", ""),
+		SiteURL:       getEnv("SITE_URL", "http://localhost:8080"),
+		UploadDir:     getEnv("UPLOAD_DIR", "/data/uploads"),
 	}
 }
 
