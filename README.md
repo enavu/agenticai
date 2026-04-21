@@ -1,96 +1,108 @@
 # enavu-hub
 
-AI-driven personal automation hub — a portfolio showcase of multi-agent architecture built on real daily use.
+Self-hosted AI personal automation hub. Built entirely with Claude Code across 5 weeks — 4 weeks of architecture planning, ~9 hours of active coding.
+
+**Live at [enavu.io](https://enavu.io)**
+
+---
 
 ## What it does
 
-- **Smart Home Chat** — Natural language control of Home Assistant via a Claude-powered ReAct agent. Say "dim the living room and turn on rest mode" and watch the agent reason through two tool calls in real time.
-- **Fitness Tracking** — Scrapes Cyclebar workout history with a Playwright microservice, stores it in Postgres, and surfaces stats on a dashboard.
-- **AI Content Generation** — A scheduled content agent picks recent workouts, calls Claude to write an Instagram caption, and posts it via the Instagram Graph API — every Tuesday and Thursday.
-- **Agent Transparency** — Every agent run (tool calls, reasoning steps, results) is logged and visible in the UI, making the architecture readable as a portfolio piece.
+| Feature | Description |
+|---------|-------------|
+| **Smart Home Chat** | Natural language → Claude ReAct agent → Home Assistant tool calls → 505 devices |
+| **Fitness Tracking** | Playwright scraper pulls Cyclebar workout history (738 rides, 212k+ calories) |
+| **Content Agent** | Workout data → AI-generated Instagram captions → auto-posted Tue/Thu |
+| **Finance Tracker** | Private lease agreement tracker with auto-computed reliability scoring |
+| **Agent Transparency** | Every agent run, tool call, and reasoning step logged and visible in UI |
+
+---
 
 ## Architecture
 
 ```
-Browser ──HTTPS/WS──► Next.js (3000)
-                          │
-                    Go API Gateway (8080)
-                    ├── REST handlers
-                    ├── WebSocket hub (HA chat)
-                    ├── Agent orchestrator (ReAct loop)
-                    │   ├── HA Agent  ──► ha_tools
-                    │   └── Content Agent ──► workout/ig/claude tools
-                    └── Scheduler (asynq cron)
-
-              PostgreSQL ← workouts, posts, agent_runs, conversations
-              Redis       ← job queue + HA state pub/sub
-
-External:
-  Python scraper (8001) ──Playwright──► Cyclebar
-  Home Assistant ──────────────────────► hotel89408.com:8123
-  Instagram Graph API
-  Anthropic API (claude-sonnet-4-6)
+┌─────────────────────────────────────────────────────┐
+│                   enavu.io (Caddy)                   │
+│              Cloudflare → UniFi → Mac               │
+└──────────────┬──────────────────────┬───────────────┘
+               │                      │
+    ┌──────────▼──────────┐  ┌────────▼────────┐
+    │   Next.js Frontend  │  │    Go API        │
+    │   (TypeScript)      │  │   (Gin + asynq)  │
+    └─────────────────────┘  └────────┬─────────┘
+                                      │
+               ┌──────────────────────┼──────────────────────┐
+               │                      │                       │
+    ┌──────────▼──────┐   ┌──────────▼──────┐   ┌──────────▼──────┐
+    │   PostgreSQL 16  │   │    Redis 7       │   │  Python Scraper  │
+    │   (main store)   │   │  (asynq queues)  │   │   (Playwright)   │
+    └─────────────────┘   └─────────────────┘   └─────────────────┘
+                                      │
+               ┌──────────────────────┼──────────────────────┐
+               │                      │                       │
+    ┌──────────▼──────┐   ┌──────────▼──────┐   ┌──────────▼──────┐
+    │  Claude Sonnet   │   │  Home Assistant  │   │  Instagram API   │
+    │  (ReAct agent)   │   │  (505 devices)   │   │  (Graph API)     │
+    └─────────────────┘   └─────────────────┘   └─────────────────┘
 ```
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Backend API + Agents | Go 1.25 · Gin · asynq |
-| Scraper | Python 3.12 · FastAPI · Playwright |
-| Frontend | Next.js 14 · TypeScript · Tailwind · shadcn/ui |
-| Database | PostgreSQL 16 |
-| Queue / Cache | Redis 7 |
-| AI | Claude claude-sonnet-4-6 (Anthropic) |
-| Deploy | Docker Compose |
-
-## Quick Start
-
-```bash
-# 1. Clone and configure
-cp .env.example .env
-# Fill in HA_TOKEN, ANTHROPIC_API_KEY, INSTAGRAM_*, CYCLEBAR_*
-
-# 2. Start everything
-make dev
-
-# 3. Open
-#   Frontend:  http://localhost:3000
-#   API docs:  http://localhost:8080/health
-```
-
-## Key Endpoints
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/health` | Service health (DB, Redis, HA) |
-| GET | `/api/v1/workouts` | Workout list + stats |
-| POST | `/api/v1/workouts/sync` | Trigger Cyclebar scrape |
-| GET | `/api/v1/home/state` | Current HA entity states |
-| POST | `/api/v1/posts/generate` | Run content agent |
-| GET | `/api/v1/agents/runs` | Agent run history |
-| GET | `/api/v1/agents/runs/:id` | Full ReAct trace |
-| WS | `/ws/chat` | HA chat (streaming agent steps) |
-
-## Credentials Needed
-
-| Credential | Where |
-|---|---|
-| `HA_TOKEN` | HA UI → Profile → Long-Lived Access Tokens |
-| `ANTHROPIC_API_KEY` | console.anthropic.com |
-| `INSTAGRAM_ACCESS_TOKEN` | Facebook Developer Portal → Instagram Graph API |
-| `CYCLEBAR_USERNAME/PASSWORD` | Your Cyclebar account |
-
-## Agent Architecture
-
-Both agents use a **ReAct loop**: Claude reasons about a goal, selects a tool, observes the result, and repeats until the task is complete. Every step is persisted to `agent_runs` in Postgres so you can replay the full trace later.
-
-### HA Agent tools
-`ha_get_state` · `ha_get_all_lights` · `ha_control_entity` · `ha_run_automation` · `ha_set_rest_mode` · `ha_get_history`
-
-### Content Agent tools
-`get_recent_workouts` · `get_ha_home_stats` · `generate_image_caption` · `post_to_instagram`
 
 ---
 
-Built by [Ena Vujovic](https://enavu.io) · Powered by [Claude](https://anthropic.com)
+## Stack
+
+**Backend:** Go 1.25 · Gin · asynq (Redis-backed job scheduler)
+**Frontend:** Next.js 14 · TypeScript · Tailwind CSS
+**Data:** PostgreSQL 16 · Redis 7
+**AI:** Claude Sonnet 4.6 via Anthropic API · ReAct agent loop
+**Scraping:** Python 3.12 · FastAPI · Playwright
+**Infra:** Docker Compose · Caddy · Cloudflare · UniFi
+**Hardware:** 2015 MacBook Pro (16GB RAM) · Raspberry Pi (Home Assistant)
+
+---
+
+## Services
+
+```
+services/
+├── api/          Go API — handlers, ReAct agents, scheduler, store
+├── frontend/     Next.js — dashboard, chat, workouts, posts, finance
+└── scraper/      Python FastAPI — Playwright-based Cyclebar scraper
+```
+
+---
+
+## How it was built
+
+This was an experiment in **AI-native development** — not vibe-coding, but using Claude as an architectural collaborator.
+
+- **Weeks 1–4:** Daily ~30 min planning sessions. Full system design, ADRs written, every decision documented before a single line of code.
+- **Week 5:** Implementation. ~9 hours of active coding to bring it all to life.
+
+The speed came from the upfront design. When you know exactly what you're building, the code writes itself.
+
+---
+
+## Running locally
+
+```bash
+cp .env.example .env
+# fill in API keys (Claude, Home Assistant, Instagram)
+
+make dev
+# starts all 6 services via Docker Compose
+```
+
+Visit `http://localhost:3000`
+
+---
+
+## Key design decisions
+
+- **Zero auth dependencies** — HMAC-SHA256 signed cookies, no libraries
+- **ReAct loop from scratch** — no LangChain, no frameworks; think → act → observe in ~200 lines of Go
+- **Single schema migration** — `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE IF NOT EXISTS` on startup, no migration tooling
+- **Asynq for scheduling** — Redis-backed cron for daily scrapes and content posting
+
+---
+
+Built by [@enavu](https://github.com/enavu) with [Claude Code](https://claude.ai/claude-code)
