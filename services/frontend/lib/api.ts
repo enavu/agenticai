@@ -5,6 +5,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     headers: { 'Content-Type': 'application/json' },
     cache: 'no-store',
+    credentials: 'include',
     ...options,
   })
   if (!res.ok) {
@@ -78,6 +79,50 @@ export interface HAState {
   last_updated: string
 }
 
+export interface LeaseAgreement {
+  id: string
+  name: string
+  person_name: string
+  total_amount: number
+  start_date: string
+  end_date: string
+  expected_monthly: number
+  payment_day: number
+  notes: string
+  created_at: string
+}
+
+export type PaymentStatus = 'on_time' | 'late' | 'partial' | 'missed'
+
+export interface LeasePayment {
+  id: string
+  agreement_id: string
+  amount_expected: number
+  amount_paid: number
+  due_date: string
+  paid_date: string | null
+  status: PaymentStatus
+  notes: string
+  created_at: string
+}
+
+export interface LeaseStats {
+  total_paid: number
+  remaining: number
+  progress_pct: number
+  reliability_score: number
+  count_on_time: number
+  count_late: number
+  count_partial: number
+  count_missed: number
+}
+
+export interface LeaseData {
+  agreement: LeaseAgreement | null
+  payments: LeasePayment[]
+  stats: LeaseStats | null
+}
+
 // ─── API functions ────────────────────────────────────────────────────────────
 
 export const api = {
@@ -97,13 +142,70 @@ export const api = {
 
   posts: {
     list: () => apiFetch<{ posts: Post[] }>('/api/v1/posts'),
-    generate: () => apiFetch<{ agent_run_id: string; status: string; output?: string }>(
-      '/api/v1/posts/generate', { method: 'POST' }
+    generate: (imageURL?: string) => apiFetch<{ agent_run_id: string; status: string; output?: string }>(
+      '/api/v1/posts/generate', {
+        method: 'POST',
+        body: JSON.stringify({ image_url: imageURL ?? '' }),
+      }
     ),
+  },
+
+  uploads: {
+    upload: async (file: File): Promise<{ url: string }> => {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`${API_URL}/api/v1/uploads`, {
+        method: 'POST',
+        credentials: 'include',
+        body: form,
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`Upload ${res.status}: ${text}`)
+      }
+      return res.json()
+    },
   },
 
   agents: {
     runs: () => apiFetch<{ runs: AgentRun[] }>('/api/v1/agents/runs'),
     run: (id: string) => apiFetch<AgentRun>(`/api/v1/agents/runs/${id}`),
+  },
+
+  finance: {
+    get: () => apiFetch<LeaseData>('/api/v1/finance'),
+    setup: (body: {
+      name: string
+      person_name: string
+      total_amount: number
+      start_date: string
+      end_date: string
+      expected_monthly: number
+      payment_day: number
+      notes: string
+    }) => apiFetch<LeaseAgreement>('/api/v1/finance/setup', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+    logPayment: (body: {
+      amount_expected: number
+      amount_paid: number
+      due_date: string
+      paid_date: string
+      notes: string
+    }) => apiFetch<LeasePayment>('/api/v1/finance/payments', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+    updatePayment: (id: string, body: {
+      amount_expected: number
+      amount_paid: number
+      due_date: string
+      paid_date: string
+      notes: string
+    }) => apiFetch<{ id: string; status: PaymentStatus }>(`/api/v1/finance/payments/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
   },
 }

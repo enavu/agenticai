@@ -106,6 +106,33 @@ CREATE TABLE IF NOT EXISTS ha_snapshots (
     state_json JSONB NOT NULL,
     captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS lease_agreements (
+    id               TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    name             TEXT NOT NULL,
+    person_name      TEXT NOT NULL,
+    total_amount     NUMERIC(12,2) NOT NULL,
+    start_date       DATE NOT NULL,
+    end_date         DATE NOT NULL,
+    expected_monthly NUMERIC(12,2) NOT NULL DEFAULT 0,
+    payment_day      INT NOT NULL DEFAULT 15,
+    notes            TEXT NOT NULL DEFAULT '',
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE lease_agreements ADD COLUMN IF NOT EXISTS payment_day INT NOT NULL DEFAULT 15;
+
+CREATE TABLE IF NOT EXISTS lease_payments (
+    id               TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    agreement_id     TEXT NOT NULL REFERENCES lease_agreements(id) ON DELETE CASCADE,
+    amount_expected  NUMERIC(12,2) NOT NULL,
+    amount_paid      NUMERIC(12,2) NOT NULL,
+    due_date         DATE NOT NULL,
+    paid_date        DATE,
+    status           TEXT NOT NULL DEFAULT 'on_time',
+    notes            TEXT NOT NULL DEFAULT '',
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 `
 
 // ─── Workouts ─────────────────────────────────────────────────────────────────
@@ -331,4 +358,112 @@ func (s *Store) GetConversationMessages(ctx context.Context, convID string) ([]m
 		msgs = append(msgs, m)
 	}
 	return msgs, nil
+}
+
+// ─── Lease ────────────────────────────────────────────────────────────────────
+
+func (s *Store) GetLeaseAgreement(ctx context.Context) (*models.LeaseAgreement, error) {
+	var a models.LeaseAgreement
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, name, person_name, total_amount, start_date, end_date,
+		       expected_monthly, payment_day, notes, created_at
+		FROM lease_agreements ORDER BY created_at ASC LIMIT 1`).
+		Scan(&a.ID, &a.Name, &a.PersonName, &a.TotalAmount, &a.StartDate, &a.EndDate,
+			&a.ExpectedMonthly, &a.PaymentDay, &a.Notes, &a.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+func (s *Store) CreateLeaseAgreement(ctx context.Context, a *models.LeaseAgreement) error {
+	if a.ID == "" {
+		a.ID = uuid.NewString()
+	}
+	if a.PaymentDay == 0 {
+		a.PaymentDay = 15
+	}
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO lease_agreements (id, name, person_name, total_amount, start_date, end_date,
+		    expected_monthly, payment_day, notes)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+		a.ID, a.Name, a.PersonName, a.TotalAmount, a.StartDate, a.EndDate,
+		a.ExpectedMonthly, a.PaymentDay, a.Notes)
+	return err
+}
+
+func (s *Store) ListLeasePayments(ctx context.Context, agreementID string) ([]models.LeasePayment, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, agreement_id, amount_expected, amount_paid, due_date, paid_date,
+		       status, notes, created_at
+		FROM lease_payments WHERE agreement_id=$1 ORDER BY due_date DESC`, agreementID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var payments []models.LeasePayment
+	for rows.Next() {
+		var p models.LeasePayment
+		if err := rows.Scan(&p.ID, &p.AgreementID, &p.AmountExpected, &p.AmountPaid,
+			&p.DueDate, &p.PaidDate, &p.Status, &p.Notes, &p.CreatedAt); err != nil {
+			return nil, err
+		}
+		payments = append(payments, p)
+	}
+	return payments, nil
+}
+
+func (s *Store) CreateLeasePayment(ctx context.Context, p *models.LeasePayment) error {
+	if p.ID == "" {
+		p.ID = uuid.NewString()
+	}
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO lease_payments (id, agreement_id, amount_expected, amount_paid,
+		    due_date, paid_date, status, notes)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+		p.ID, p.AgreementID, p.AmountExpected, p.AmountPaid,
+		p.DueDate, p.PaidDate, string(p.Status), p.Notes)
+	return err
+}
+
+func (s *Store) UpdateLeasePayment(ctx context.Context, id string, amountExpected, amountPaid float64, dueDate time.Time, paidDate *time.Time, status models.PaymentStatus, notes string) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE lease_payments SET
+		    amount_expected=$1, amount_paid=$2, due_date=$3, paid_date=$4,
+		    status=$5, notes=$6
+		WHERE id=$7`,
+		amountExpected, amountPaid, dueDate, paidDate, string(status), notes, id)
+	return err
+}
+
+func (s *Store) GetLeaseStats(ctx context.Context, agreementID string, totalAmount float64) (*models.LeaseStats, error) {
+	var stats models.LeaseStats
+
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+		    COALESCE(SUM(amount_paid), 0),
+		    COUNT(*) FILTER (WHERE status = 'on_time'),
+		    COUNT(*) FILTER (WHERE status = 'late'),
+		    COUNT(*) FILTER (WHERE status = 'partial'),
+		    COUNT(*) FILTER (WHERE status = 'missed')
+		FROM lease_payments WHERE agreement_id=$1`, agreementID).
+		Scan(&stats.TotalPaid, &stats.CountOnTime, &stats.CountLate,
+			&stats.CountPartial, &stats.CountMissed)
+	if err != nil {
+		return nil, err
+	}
+
+	stats.Remaining = totalAmount - stats.TotalPaid
+	if totalAmount > 0 {
+		stats.ProgressPct = (stats.TotalPaid / totalAmount) * 100
+	}
+
+	total := stats.CountOnTime + stats.CountLate + stats.CountPartial + stats.CountMissed
+	if total > 0 {
+		score := stats.CountOnTime*100 + stats.CountLate*70 + stats.CountPartial*50
+		stats.ReliabilityScore = score / total
+	}
+
+	return &stats, nil
 }

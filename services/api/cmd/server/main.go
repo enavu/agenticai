@@ -55,16 +55,19 @@ func main() {
 	hub := ws.NewHub()
 
 	// ─── Handlers ────────────────────────────────────────────────────────────
-	healthH := handlers.NewHealthHandler(db, haClient, scraperClient)
+	authH    := handlers.NewAuthHandler(cfg)
+	healthH  := handlers.NewHealthHandler(db, haClient, scraperClient)
 	workoutH := handlers.NewWorkoutHandler(db, scraperClient)
-	homeH := handlers.NewHomeHandler(haClient)
-	postH := handlers.NewPostHandler(db, contentAgent)
-	agentH := handlers.NewAgentHandler(db)
-	chatH := handlers.NewChatHandler(hub, haAgent, db)
+	homeH    := handlers.NewHomeHandler(haClient)
+	postH    := handlers.NewPostHandler(db, contentAgent)
+	agentH   := handlers.NewAgentHandler(db)
+	chatH    := handlers.NewChatHandler(hub, haAgent, db)
+	uploadH  := handlers.NewUploadHandler(cfg.UploadDir, cfg.SiteURL)
+	financeH := handlers.NewFinanceHandler(db)
 
 	// ─── Router ──────────────────────────────────────────────────────────────
 	router := gin.New()
-	setupRoutes(router, healthH, workoutH, homeH, postH, agentH, chatH)
+	setupRoutes(router, cfg.JWTSecret, authH, healthH, workoutH, homeH, postH, agentH, chatH, uploadH, financeH, cfg.UploadDir)
 
 	// ─── Scheduler (asynq) ───────────────────────────────────────────────────
 	scheduler := setupScheduler(cfg, db, scraperClient, contentAgent)
@@ -136,7 +139,7 @@ func runWorker(cfg *config.Config, db *store.Store, scraper *services.ScraperCli
 	})
 	mux.HandleFunc("content:generate", func(ctx context.Context, t *asynq.Task) error {
 		log.Println("Scheduled: running content agent")
-		run, err := contentAgent.Run(ctx, nil)
+		run, err := contentAgent.Run(ctx, "", nil)
 		if err != nil {
 			return err
 		}
