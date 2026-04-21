@@ -102,7 +102,7 @@ build: ## Build all Docker images
 
 # ─── Production ───────────────────────────────────────────────────────────────
 
-DOCKER_COMPOSE_PROD := $(DOCKER_COMPOSE) -f docker-compose.prod.yml
+DOCKER_COMPOSE_PROD := $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml
 
 prod: ## Start in production mode (Caddy + SSL)
 	$(DOCKER_COMPOSE_PROD) up --build -d

@@ -7,6 +7,7 @@ services:
       - "443:443/udp"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/etc/caddy/certs:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
@@ -17,6 +18,10 @@ services:
       - enavu-net
 
   frontend:
+    build:
+      args:
+        - NEXT_PUBLIC_API_URL=https://enavu.io
+        - NEXT_PUBLIC_WS_URL=wss://enavu.io
     ports: []  # Caddy handles external traffic, no direct port exposure
     environment:
       - API_URL=http://api:8080
@@ -27,7 +32,11 @@ services:
     ports: []  # Not exposed directly in prod
     environment:
       - ENV=production
+      - SITE_URL=https://enavu.io
+    volumes:
+      - uploads_data:/data/uploads
 
 volumes:
   caddy_data:
   caddy_config:
+  uploads_data:

@@ -19,3 +19,7 @@ services/scraper/.venv/
 
 # OS
 .DS_Store
+
+# Certs and backups — local only
+certs/
+backups/

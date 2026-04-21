@@ -17,6 +17,10 @@ services:
       - INSTAGRAM_USER_ID=${INSTAGRAM_USER_ID}
       - SCRAPER_URL=http://scraper:8001
       - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-prod}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+    volumes:
+      - uploads_data:/data/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -92,6 +96,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  uploads_data:
 
 networks:
   enavu-net:

@@ -1,11 +1,13 @@
 enavu.io {
+    tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
+
     # WebSocket upgrade for chat
     handle /ws/* {
         reverse_proxy api:8080
     }
 
-    # API routes
-    handle /api/* {
+    # API routes (v1 only — /api/auth/* is a Next.js route handler)
+    handle /api/v1/* {
         reverse_proxy api:8080
     }
 
