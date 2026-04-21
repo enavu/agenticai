@@ -8,6 +8,7 @@ from playwright.async_api import async_playwright, Page, TimeoutError as Playwri
 logger = logging.getLogger(__name__)
 
 CYCLEBAR_LOGIN_URL = "https://members.cyclebar.com/auth/login"
+ATTENDANCE_URL = "https://members.cyclebar.com/history/attendance"
 
 
 async def scrape_workouts(username: str, password: str) -> list[dict]:
@@ -52,7 +53,7 @@ async def _do_scrape(page: Page, username: str, password: str) -> list[dict]:
     await page.fill("input[type='password']", password)
     await page.click("button[type='submit'], button:has-text('Sign In'), button:has-text('Log In')")
 
-    # Wait for redirect after login — Cyclebar lands on the home dashboard
+    # Wait for redirect after login
     try:
         await page.wait_for_url("https://members.cyclebar.com/**", timeout=15_000)
         if "login" in page.url or "auth" in page.url:
@@ -62,20 +63,10 @@ async def _do_scrape(page: Page, username: str, password: str) -> list[dict]:
 
     logger.info(f"Logged in, at: {page.url}")
 
-    # Navigate to history, then click ATTENDANCE tab
-    await page.goto("https://members.cyclebar.com/history", wait_until="domcontentloaded", timeout=30_000)
-    # Wait for nav to be ready (page shell)
+    # Navigate directly to the unfiltered attendance page (all studios)
+    await page.goto(ATTENDANCE_URL, wait_until="domcontentloaded", timeout=30_000)
     await page.wait_for_selector("nav", timeout=10_000)
-    logger.info(f"History page URL: {page.url}")
-
-    try:
-        att_link = page.locator("a:has-text('ATTENDANCE'), a:has-text('Attendance')")
-        await att_link.first.wait_for(timeout=10_000)
-        await att_link.first.click()
-        await asyncio.sleep(2)  # let the tab content start loading
-        logger.info(f"On ATTENDANCE tab: {page.url}")
-    except Exception as e:
-        logger.warning(f"Could not click ATTENDANCE tab: {e}")
+    logger.info(f"Attendance page: {page.url}")
 
     # Wait for the attendance table to appear
     try:
@@ -83,7 +74,7 @@ async def _do_scrape(page: Page, username: str, password: str) -> list[dict]:
     except PlaywrightTimeout:
         logger.warning("Attendance table not found within timeout")
 
-    # Scroll to load all rows (infinite scroll or lazy load)
+    # Scroll to load all rows (infinite scroll)
     await _scroll_to_bottom(page)
 
     workouts = await _parse_attendance_table(page)
@@ -91,22 +82,45 @@ async def _do_scrape(page: Page, username: str, password: str) -> list[dict]:
     return workouts
 
 
-async def _scroll_to_bottom(page: Page, max_scrolls: int = 30) -> None:
-    for _ in range(max_scrolls):
-        prev_height = await page.evaluate("document.body.scrollHeight")
-        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        await asyncio.sleep(1.2)
-        new_height = await page.evaluate("document.body.scrollHeight")
-        if new_height == prev_height:
-            break
+async def _scroll_to_bottom(page: Page, max_rounds: int = 120) -> None:
+    """
+    Scroll by bringing the last table row into view, then waiting for
+    React to lazy-load more rows. Stops when row count stops growing.
+    """
+    prev_count = 0
+    stale_rounds = 0
+
+    for _ in range(max_rounds):
+        # Scroll the last row into view — this triggers React's IntersectionObserver
+        row_count = await page.evaluate("""
+            () => {
+                const rows = document.querySelectorAll('tbody.rows-in tr, tr.no-animate');
+                if (rows.length > 0) {
+                    rows[rows.length - 1].scrollIntoView({ behavior: 'smooth', block: 'end' });
+                }
+                // Also scroll the window to the bottom for good measure
+                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                return rows.length;
+            }
+        """)
+        await asyncio.sleep(1.5)
+
+        if row_count == prev_count:
+            stale_rounds += 1
+            if stale_rounds >= 3:
+                break  # No new rows after 3 consecutive rounds — we're done
+        else:
+            stale_rounds = 0
+            logger.info(f"Scroll: {prev_count} → {row_count} rows")
+
+        prev_count = row_count
 
 
 async def _parse_attendance_table(page: Page) -> list[dict]:
     """
-    Parse the LOHI RIDE ATTENDANCE table using a single JS evaluation
+    Parse the attendance table using a single JS evaluation
     to avoid thousands of slow Playwright IPC calls.
     """
-    # Extract all row data in one JS call
     rows_data = await page.evaluate("""
         () => {
             const rows = document.querySelectorAll('tbody.rows-in tr, tr.no-animate');

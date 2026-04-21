@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { api, type Workout, type WorkoutStats } from '@/lib/api'
-import { RefreshCw, Flame, Clock, Trophy } from 'lucide-react'
+import { RefreshCw, Flame, Clock, Trophy, Zap } from 'lucide-react'
 
 export default function WorkoutsPage() {
   const [workouts, setWorkouts] = useState<Workout[]>([])
@@ -40,6 +40,10 @@ export default function WorkoutsPage() {
 
   useEffect(() => { load() }, [])
 
+  const maxCalsWorkout = workouts.length > 0
+    ? workouts.reduce((best, w) => (w.cals_burned ?? 0) > (best?.cals_burned ?? 0) ? w : best, workouts[0])
+    : null
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -65,7 +69,7 @@ export default function WorkoutsPage() {
 
       {/* Stats row */}
       {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
             <div className="flex items-center gap-2 mb-1">
               <Trophy size={16} className="text-yellow-400" />
@@ -87,6 +91,18 @@ export default function WorkoutsPage() {
             </div>
             <p className="text-2xl font-bold">{Math.round(stats.total_minutes / 60)}</p>
           </div>
+          <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Zap size={16} className="text-yellow-400" />
+              <span className="text-xs text-neutral-400">Cal PR</span>
+            </div>
+            <p className="text-2xl font-bold">{maxCalsWorkout?.cals_burned ?? '—'}</p>
+            {maxCalsWorkout?.cals_burned && (
+              <p className="text-xs text-neutral-500 mt-0.5">
+                {new Date(maxCalsWorkout.class_date).toLocaleDateString()}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -107,8 +123,6 @@ export default function WorkoutsPage() {
                 <th className="px-4 py-2.5 text-left">Instructor</th>
                 <th className="px-4 py-2.5 text-left">Studio</th>
                 <th className="px-4 py-2.5 text-right">Cals</th>
-                <th className="px-4 py-2.5 text-right">Avg Output</th>
-                <th className="px-4 py-2.5 text-right">Rank</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-800">
@@ -121,8 +135,6 @@ export default function WorkoutsPage() {
                   <td className="px-4 py-2.5 text-neutral-300">{w.instructor || '—'}</td>
                   <td className="px-4 py-2.5 text-neutral-400">{w.studio || '—'}</td>
                   <td className="px-4 py-2.5 text-right text-orange-400">{w.cals_burned ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-right text-blue-400">{w.avg_output ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-right text-yellow-400">{w.rank ?? '—'}</td>
                 </tr>
               ))}
             </tbody>
