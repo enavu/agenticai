@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { clsx } from 'clsx'
-import { Home, Dumbbell, Instagram, Bot, MessageSquare, LogIn, LogOut, MapPin, Layers, DollarSign } from 'lucide-react'
+import { Home, Dumbbell, Instagram, Bot, MessageSquare, LogIn, LogOut, MapPin, Layers, DollarSign, Lightbulb } from 'lucide-react'
 
 const publicLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: Home },
@@ -14,6 +14,7 @@ const publicLinks = [
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/journey', label: 'Journey', icon: MapPin },
   { href: '/projects', label: 'Projects', icon: Layers },
+  { href: '/todos', label: 'Todos', icon: Lightbulb },
 ]
 
 const privateLinks = [

@@ -1,4 +1,4 @@
-import { Clock, GitBranch, Zap, Terminal, Lock, Rocket, Brain, Camera, DollarSign } from 'lucide-react'
+import { Clock, GitBranch, Zap, Terminal, Lock, Rocket, Brain, Camera, DollarSign, Lightbulb, RefreshCw } from 'lucide-react'
 
 const STATS = [
   { label: 'Total active', value: '~11h' },
@@ -226,6 +226,71 @@ export default function JourneyPage() {
               </div>
             )
           })}
+        </div>
+      </div>
+
+      {/* Planned section */}
+      <div className="pt-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Lightbulb size={16} className="text-yellow-400" />
+          <h2 className="text-base font-semibold text-white">What's Next</h2>
+          <span className="text-xs text-neutral-500">tracked in <a href="/todos" className="text-neutral-400 hover:text-white transition-colors underline underline-offset-2">Todos</a></span>
+        </div>
+
+        <div className="relative">
+          <div className="absolute left-5 top-0 bottom-0 w-px border-l border-dashed border-neutral-700" />
+          <div className="space-y-4">
+            {[
+              {
+                icon: GitBranch,
+                color: 'text-violet-400',
+                border: 'border-violet-800/30',
+                bg: 'bg-violet-900/5',
+                title: 'Nondeterministic Orchestrator',
+                description: 'Multi-path ReAct agent that fans out to N parallel Claude calls, compares branches, and synthesizes the divergence — making the reasoning visible in UI.',
+              },
+              {
+                icon: RefreshCw,
+                color: 'text-amber-400',
+                border: 'border-amber-800/30',
+                bg: 'bg-amber-900/5',
+                title: 'SDACE Agent Loop',
+                description: 'Refactor the ReAct agent into a 5-stage lifecycle: Sense (context load) → Decide → Act → Communicate (audience-aware output) → Evolve (memory write-back).',
+              },
+              {
+                icon: () => <span className="text-sky-400 text-xs font-bold">AF</span>,
+                color: 'text-sky-400',
+                border: 'border-sky-800/30',
+                bg: 'bg-sky-900/5',
+                title: 'Airflow Data Pipeline',
+                description: 'Replace asynq cron with Apache Airflow DAGs. Real pipeline visibility, retries, backfill, and a template library for future pipelines.',
+              },
+              {
+                icon: () => <span className="text-emerald-400 text-xs font-bold">CV</span>,
+                color: 'text-emerald-400',
+                border: 'border-emerald-800/30',
+                bg: 'bg-emerald-900/5',
+                title: 'Claude Validation Layer',
+                description: 'Adversarial second-pass reviewer: checks Claude-written code for hallucinated APIs, over-engineered abstractions, and unnecessary complexity before it ships.',
+              },
+            ].map((item, i) => {
+              const Icon = item.icon
+              return (
+                <div key={i} className="relative pl-14 opacity-70">
+                  <div className={`absolute left-0 flex h-10 w-10 items-center justify-center rounded-full border border-dashed ${item.border}`}>
+                    <Icon size={16} className={item.color} />
+                  </div>
+                  <div className={`rounded-lg border border-dashed ${item.border} ${item.bg} p-4`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-medium text-neutral-300 text-sm">{item.title}</h3>
+                      <span className="text-[10px] text-neutral-600 border border-neutral-700 rounded px-1.5 py-0.5">planned</span>
+                    </div>
+                    <p className="text-xs text-neutral-500">{item.description}</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       </div>
 
