@@ -1,4 +1,4 @@
-import { Clock, GitBranch, Zap, Terminal, Lock, Rocket, Brain, Camera, DollarSign, Lightbulb, RefreshCw } from 'lucide-react'
+import { Clock, GitBranch, Zap, Terminal, Lock, Rocket, Brain, Camera, DollarSign, Lightbulb, RefreshCw, Linkedin } from 'lucide-react'
 
 const STATS = [
   { label: 'Total active', value: '~11h' },
@@ -256,6 +256,14 @@ export default function JourneyPage() {
                 bg: 'bg-amber-900/5',
                 title: 'SDACE Agent Loop',
                 description: 'Refactor the ReAct agent into a 5-stage lifecycle: Sense (context load) → Decide → Act → Communicate (audience-aware output) → Evolve (memory write-back).',
+              },
+              {
+                icon: Linkedin,
+                color: 'text-blue-400',
+                border: 'border-blue-800/30',
+                bg: 'bg-blue-900/5',
+                title: 'LinkedIn Post Automation',
+                description: 'Same content agent pattern as Instagram but routed to LinkedIn — professional tone, data-forward captions, Mon/Wed/Fri cadence via asynq.',
               },
               {
                 icon: () => <span className="text-sky-400 text-xs font-bold">AF</span>,

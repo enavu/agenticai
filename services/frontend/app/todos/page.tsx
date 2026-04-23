@@ -1,4 +1,4 @@
-import { Lightbulb, GitBranch, Wind, ShieldCheck, RefreshCw } from 'lucide-react'
+import { Lightbulb, GitBranch, Wind, ShieldCheck, RefreshCw, Linkedin } from 'lucide-react'
 
 const IDEAS = [
   {
@@ -68,6 +68,30 @@ const IDEAS = [
       'Apply to both HA agent and content agent — same loop, different tools',
     ],
     stack: ['Go', 'Claude API', 'PostgreSQL', 'Redis'],
+  },
+  {
+    id: 5,
+    icon: Linkedin,
+    color: 'text-blue-400',
+    border: 'border-blue-800/50',
+    bg: 'bg-blue-900/10',
+    badge: 'bg-blue-900/40 text-blue-300 border-blue-700/50',
+    title: 'LinkedIn Post Automation',
+    tag: 'Content / Social',
+    status: 'planned',
+    description:
+      'Auto-post to LinkedIn on a schedule — same pattern as Instagram but for professional content. Career updates, project milestones, AI/data insights pulled from enavu-hub activity. Content agent generates the post, asynq queues the delivery.',
+    why: 'Instagram is visual + personal. LinkedIn is professional reach. The content agent already generates captions — routing a version to LinkedIn is mostly wiring, not new logic.',
+    approach: [
+      'Create LinkedIn app at developer.linkedin.com, request w_member_social permission',
+      'OAuth2 flow to get access token (stored in env, ~60 day refresh cycle)',
+      'POST to api.linkedin.com/v2/ugcPosts — text + optional image via asset upload',
+      'New content agent prompt variant: professional tone, data-forward, first-person',
+      'asynq cron: generate + post on a Mon/Wed/Fri cadence (separate from Instagram Tue/Thu)',
+      'Posts page: toggle between Instagram and LinkedIn drafts',
+      'Blocker: w_member_social permission may require LinkedIn use case review (days to weeks)',
+    ],
+    stack: ['Go', 'LinkedIn API', 'Claude API', 'asynq', 'OAuth2'],
   },
   {
     id: 3,
