@@ -251,8 +251,8 @@ export default function TodosPage() {
       </div>
 
       {[
-        { label: 'AI & Infrastructure', items: IDEAS },
-        { label: 'Life Intelligence · Home Assistant', items: LIFE_INTELLIGENCE },
+        { label: 'Life Intelligence · Home Assistant', items: [...LIFE_INTELLIGENCE].reverse() },
+        { label: 'AI & Infrastructure', items: [...IDEAS].reverse() },
       ].map(({ label, items }) => (
         <div key={label} className="space-y-4">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500">{label}</h2>

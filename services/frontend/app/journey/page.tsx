@@ -209,7 +209,7 @@ export default function JourneyPage() {
         <div className="absolute left-5 top-0 bottom-0 w-px bg-neutral-800" />
 
         <div className="space-y-6">
-          {SESSIONS.map((session, i) => {
+          {[...SESSIONS].reverse().map((session, i) => {
             const Icon = session.icon
             return (
               <div key={i} className="relative pl-14">
