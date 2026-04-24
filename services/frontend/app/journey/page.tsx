@@ -1,12 +1,12 @@
-import { Clock, GitBranch, Zap, Terminal, Lock, Rocket, Brain, Camera, DollarSign, Lightbulb, RefreshCw, Linkedin } from 'lucide-react'
+import { Clock, GitBranch, Zap, Terminal, Lock, Rocket, Brain, Camera, DollarSign, Lightbulb, RefreshCw, Linkedin, Database } from 'lucide-react'
 
 const STATS = [
-  { label: 'Total active', value: '~11h' },
+  { label: 'Total active', value: '~12h' },
   { label: 'Planning phase', value: '~4h' },
-  { label: 'Build phase', value: '~7h' },
-  { label: 'Lines of code', value: '~5,000' },
+  { label: 'Build phase', value: '~8h' },
+  { label: 'Lines of code', value: '~5,500' },
   { label: 'Services', value: '5' },
-  { label: 'Time span', value: '7 weeks' },
+  { label: 'Time span', value: '8 weeks' },
 ]
 
 const SESSIONS = [
@@ -139,6 +139,24 @@ const SESSIONS = [
       'Progress bar with months elapsed vs term length',
       'Edit payment modal — corrects wrong dates without losing history',
       'Finance nav link appears only when authenticated',
+    ],
+  },
+  {
+    date: 'Apr 24, 2026',
+    duration: '~1h',
+    icon: Database,
+    color: 'text-cyan-400',
+    border: 'border-cyan-800/40',
+    bg: 'bg-cyan-900/10',
+    title: 'HA State Historian — 782 Devices, Every 15 Min',
+    description: 'Foundation of the Life Intelligence stack. Added a cron job that snapshots all 782 Home Assistant entities to Postgres every 15 minutes — security cameras, motion sensors, door contacts, automations, audio detectors, climate, lights. First snapshot ran at 15:15 UTC. By tomorrow: ~96 snapshots. By next week: enough data for Claude to start reading patterns in how the home actually lives.',
+    milestones: [
+      'ha_snapshots table already in schema — added captured_at index for fast time-range queries',
+      'CreateHASnapshot / ListHASnapshots store methods',
+      'ha:snapshot asynq cron (*/15 * * * *) → GetAllStates → JSONB → Postgres',
+      'GET /api/v1/home/history?hours=24&limit=96 endpoint wired',
+      'First snapshot: 782 entities captured — cameras, sensors, doors, automations, microphones',
+      'Unlocks: Life Pattern Observer, Morning Briefing, Proactive Suggestions, Anomaly Detector',
     ],
   },
   {
