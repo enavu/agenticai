@@ -41,6 +41,7 @@ func setupRoutes(
 		v1.GET("/workouts", workout.List)
 		v1.GET("/home/state", home.State)
 		v1.GET("/home/lights", home.Lights)
+		v1.GET("/home/history", home.History)
 		v1.GET("/posts", post.List)
 		v1.GET("/agents/runs", agentH.ListRuns)
 		v1.GET("/agents/runs/:id", agentH.GetRun)

@@ -107,6 +107,8 @@ CREATE TABLE IF NOT EXISTS ha_snapshots (
     captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS ha_snapshots_captured_at_idx ON ha_snapshots(captured_at DESC);
+
 CREATE TABLE IF NOT EXISTS lease_agreements (
     id               TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     name             TEXT NOT NULL,
@@ -358,6 +360,38 @@ func (s *Store) GetConversationMessages(ctx context.Context, convID string) ([]m
 		msgs = append(msgs, m)
 	}
 	return msgs, nil
+}
+
+// ─── HA Snapshots ─────────────────────────────────────────────────────────────
+
+func (s *Store) CreateHASnapshot(ctx context.Context, stateJSON []byte) error {
+	_, err := s.pool.Exec(ctx, `INSERT INTO ha_snapshots (state_json) VALUES ($1)`, stateJSON)
+	return err
+}
+
+func (s *Store) ListHASnapshots(ctx context.Context, hours, limit int) ([]models.HASnapshot, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, state_json, captured_at
+		FROM ha_snapshots
+		WHERE captured_at >= NOW() - make_interval(hours => $1)
+		ORDER BY captured_at DESC
+		LIMIT $2`, hours, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var snapshots []models.HASnapshot
+	for rows.Next() {
+		var snap models.HASnapshot
+		var raw []byte
+		if err := rows.Scan(&snap.ID, &raw, &snap.CapturedAt); err != nil {
+			return nil, err
+		}
+		json.Unmarshal(raw, &snap.States)
+		snapshots = append(snapshots, snap)
+	}
+	return snapshots, nil
 }
 
 // ─── Lease ────────────────────────────────────────────────────────────────────

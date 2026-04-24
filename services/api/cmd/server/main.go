@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -58,7 +60,7 @@ func main() {
 	authH    := handlers.NewAuthHandler(cfg)
 	healthH  := handlers.NewHealthHandler(db, haClient, scraperClient)
 	workoutH := handlers.NewWorkoutHandler(db, scraperClient)
-	homeH    := handlers.NewHomeHandler(haClient)
+	homeH    := handlers.NewHomeHandler(haClient, db)
 	postH    := handlers.NewPostHandler(db, contentAgent)
 	agentH   := handlers.NewAgentHandler(db)
 	chatH    := handlers.NewChatHandler(hub, haAgent, db)
@@ -70,7 +72,7 @@ func main() {
 	setupRoutes(router, cfg.JWTSecret, authH, healthH, workoutH, homeH, postH, agentH, chatH, uploadH, financeH, cfg.UploadDir)
 
 	// ─── Scheduler (asynq) ───────────────────────────────────────────────────
-	scheduler := setupScheduler(cfg, db, scraperClient, contentAgent)
+	scheduler := setupScheduler(cfg, db, scraperClient, contentAgent, haClient)
 	if err := scheduler.Start(); err != nil {
 		log.Printf("Warning: scheduler failed to start: %v", err)
 	}
@@ -103,7 +105,7 @@ func main() {
 }
 
 // setupScheduler wires up cron jobs via asynq.
-func setupScheduler(cfg *config.Config, db *store.Store, scraper *services.ScraperClient, contentAgent *agent.ContentAgent) *asynq.Scheduler {
+func setupScheduler(cfg *config.Config, db *store.Store, scraper *services.ScraperClient, contentAgent *agent.ContentAgent, ha *services.HAClient) *asynq.Scheduler {
 	redisOpt := asynq.RedisClientOpt{Addr: redisAddr(cfg.RedisURL)}
 	scheduler := asynq.NewScheduler(redisOpt, &asynq.SchedulerOpts{
 		Location: time.Local,
@@ -115,13 +117,16 @@ func setupScheduler(cfg *config.Config, db *store.Store, scraper *services.Scrap
 	// Tue + Thu 7pm: generate + post Instagram content
 	scheduler.Register("0 19 * * 2,4", asynq.NewTask("content:generate", nil))
 
+	// Every 15 min: snapshot Home Assistant state
+	scheduler.Register("*/15 * * * *", asynq.NewTask("ha:snapshot", nil))
+
 	// Start worker to process tasks
-	go runWorker(cfg, db, scraper, contentAgent)
+	go runWorker(cfg, db, scraper, contentAgent, ha)
 
 	return scheduler
 }
 
-func runWorker(cfg *config.Config, db *store.Store, scraper *services.ScraperClient, contentAgent *agent.ContentAgent) {
+func runWorker(cfg *config.Config, db *store.Store, scraper *services.ScraperClient, contentAgent *agent.ContentAgent, ha *services.HAClient) {
 	redisOpt := asynq.RedisClientOpt{Addr: redisAddr(cfg.RedisURL)}
 	srv := asynq.NewServer(redisOpt, asynq.Config{
 		Concurrency: 2,
@@ -144,6 +149,21 @@ func runWorker(cfg *config.Config, db *store.Store, scraper *services.ScraperCli
 			return err
 		}
 		log.Printf("Scheduled content: run %s completed with status %s", run.ID, run.Status)
+		return nil
+	})
+	mux.HandleFunc("ha:snapshot", func(ctx context.Context, t *asynq.Task) error {
+		states, err := ha.GetAllStates(ctx)
+		if err != nil {
+			return fmt.Errorf("ha snapshot: get states: %w", err)
+		}
+		stateJSON, err := json.Marshal(states)
+		if err != nil {
+			return fmt.Errorf("ha snapshot: marshal: %w", err)
+		}
+		if err := db.CreateHASnapshot(ctx, stateJSON); err != nil {
+			return fmt.Errorf("ha snapshot: store: %w", err)
+		}
+		log.Printf("HA snapshot: captured %d entities", len(states))
 		return nil
 	})
 
