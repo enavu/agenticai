@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/google/uuid"
 
@@ -108,6 +109,19 @@ CREATE TABLE IF NOT EXISTS ha_snapshots (
 );
 
 CREATE INDEX IF NOT EXISTS ha_snapshots_captured_at_idx ON ha_snapshots(captured_at DESC);
+
+CREATE TABLE IF NOT EXISTS ha_state_changes (
+    id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    entity_id   TEXT NOT NULL,
+    state       TEXT NOT NULL,
+    attributes  JSONB,
+    changed_at  TIMESTAMPTZ NOT NULL,
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ha_state_changes_entity_time_uidx ON ha_state_changes(entity_id, changed_at);
+CREATE INDEX IF NOT EXISTS ha_state_changes_entity_idx ON ha_state_changes(entity_id, changed_at DESC);
+CREATE INDEX IF NOT EXISTS ha_state_changes_changed_at_idx ON ha_state_changes(changed_at DESC);
 
 CREATE TABLE IF NOT EXISTS lease_agreements (
     id               TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -392,6 +406,75 @@ func (s *Store) ListHASnapshots(ctx context.Context, hours, limit int) ([]models
 		snapshots = append(snapshots, snap)
 	}
 	return snapshots, nil
+}
+
+// ─── HA State Changes ─────────────────────────────────────────────────────────
+
+func (s *Store) GetLatestHAChangeTime(ctx context.Context) (time.Time, error) {
+	var t time.Time
+	err := s.pool.QueryRow(ctx, `SELECT COALESCE(MAX(changed_at), '1970-01-01') FROM ha_state_changes`).Scan(&t)
+	return t, err
+}
+
+func (s *Store) BulkInsertHAStateChanges(ctx context.Context, changes []models.HAStateChange) (int, error) {
+	if len(changes) == 0 {
+		return 0, nil
+	}
+	batch := &pgx.Batch{}
+	for _, c := range changes {
+		attrJSON, _ := json.Marshal(c.Attributes)
+		batch.Queue(`
+			INSERT INTO ha_state_changes (entity_id, state, attributes, changed_at)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (entity_id, changed_at) DO NOTHING`,
+			c.EntityID, c.State, attrJSON, c.ChangedAt)
+	}
+	br := s.pool.SendBatch(ctx, batch)
+	defer br.Close()
+
+	inserted := 0
+	for range changes {
+		ct, err := br.Exec()
+		if err != nil {
+			return inserted, err
+		}
+		inserted += int(ct.RowsAffected())
+	}
+	return inserted, nil
+}
+
+func (s *Store) ListHAStateChanges(ctx context.Context, entityID string, hours, limit int) ([]models.HAStateChange, error) {
+	var rows pgx.Rows
+	var err error
+	if entityID != "" {
+		rows, err = s.pool.Query(ctx, `
+			SELECT id, entity_id, state, attributes, changed_at, recorded_at
+			FROM ha_state_changes
+			WHERE entity_id = $1 AND changed_at >= NOW() - make_interval(hours => $2)
+			ORDER BY changed_at DESC LIMIT $3`, entityID, hours, limit)
+	} else {
+		rows, err = s.pool.Query(ctx, `
+			SELECT id, entity_id, state, attributes, changed_at, recorded_at
+			FROM ha_state_changes
+			WHERE changed_at >= NOW() - make_interval(hours => $1)
+			ORDER BY changed_at DESC LIMIT $2`, hours, limit)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var changes []models.HAStateChange
+	for rows.Next() {
+		var c models.HAStateChange
+		var attrJSON []byte
+		if err := rows.Scan(&c.ID, &c.EntityID, &c.State, &attrJSON, &c.ChangedAt, &c.RecordedAt); err != nil {
+			return nil, err
+		}
+		json.Unmarshal(attrJSON, &c.Attributes)
+		changes = append(changes, c)
+	}
+	return changes, nil
 }
 
 // ─── Lease ────────────────────────────────────────────────────────────────────

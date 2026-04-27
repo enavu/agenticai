@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -17,6 +16,7 @@ import (
 	"enavu-hub/api/internal/agent"
 	"enavu-hub/api/internal/config"
 	"enavu-hub/api/internal/handlers"
+	"enavu-hub/api/internal/models"
 	"enavu-hub/api/internal/services"
 	"enavu-hub/api/internal/store"
 	"enavu-hub/api/internal/ws"
@@ -152,18 +152,41 @@ func runWorker(cfg *config.Config, db *store.Store, scraper *services.ScraperCli
 		return nil
 	})
 	mux.HandleFunc("ha:snapshot", func(ctx context.Context, t *asynq.Task) error {
-		states, err := ha.GetAllStates(ctx)
+		// Watermark: pull from last recorded change (or 16 min ago on first run)
+		since, err := db.GetLatestHAChangeTime(ctx)
+		if err != nil || since.IsZero() || since.Year() == 1970 {
+			since = time.Now().Add(-16 * time.Minute)
+		}
+		until := time.Now()
+
+		// HA history API can be slow for all entities — give it 60s
+		histCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		defer cancel()
+
+		history, err := ha.GetHistoryRange(histCtx, since, until)
 		if err != nil {
-			return fmt.Errorf("ha snapshot: get states: %w", err)
+			return fmt.Errorf("ha history: fetch: %w", err)
 		}
-		stateJSON, err := json.Marshal(states)
+
+		// Flatten entity histories into individual state changes
+		var changes []models.HAStateChange
+		for _, entityHistory := range history {
+			for _, s := range entityHistory {
+				changes = append(changes, models.HAStateChange{
+					EntityID:   s.EntityID,
+					State:      s.State,
+					Attributes: s.Attributes,
+					ChangedAt:  s.LastChanged,
+				})
+			}
+		}
+
+		inserted, err := db.BulkInsertHAStateChanges(ctx, changes)
 		if err != nil {
-			return fmt.Errorf("ha snapshot: marshal: %w", err)
+			return fmt.Errorf("ha history: store: %w", err)
 		}
-		if err := db.CreateHASnapshot(ctx, stateJSON); err != nil {
-			return fmt.Errorf("ha snapshot: store: %w", err)
-		}
-		log.Printf("HA snapshot: captured %d entities", len(states))
+		log.Printf("HA history: %d new state changes from %d entities (%s → %s)",
+			inserted, len(history), since.Format("15:04:05"), until.Format("15:04:05"))
 		return nil
 	})
 

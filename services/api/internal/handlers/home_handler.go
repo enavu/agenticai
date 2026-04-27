@@ -56,21 +56,22 @@ func (h *HomeHandler) Lights(c *gin.Context) {
 
 func (h *HomeHandler) History(c *gin.Context) {
 	hours, _ := strconv.Atoi(c.DefaultQuery("hours", "24"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "96"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "1000"))
+	entityID := c.Query("entity")
 	if hours < 1 || hours > 720 {
 		hours = 24
 	}
-	if limit < 1 || limit > 500 {
-		limit = 96
+	if limit < 1 || limit > 5000 {
+		limit = 1000
 	}
 
-	snapshots, err := h.db.ListHASnapshots(c.Request.Context(), hours, limit)
+	changes, err := h.db.ListHAStateChanges(c.Request.Context(), entityID, hours, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if snapshots == nil {
-		snapshots = []models.HASnapshot{}
+	if changes == nil {
+		changes = []models.HAStateChange{}
 	}
-	c.JSON(http.StatusOK, gin.H{"snapshots": snapshots, "count": len(snapshots)})
+	c.JSON(http.StatusOK, gin.H{"changes": changes, "count": len(changes)})
 }

@@ -161,6 +161,16 @@ func (c *HAClient) RunAutomation(ctx context.Context, automationID string) error
 		map[string]any{"entity_id": automationID}, nil)
 }
 
+func (c *HAClient) GetHistoryRange(ctx context.Context, since, until time.Time) ([][]HAState, error) {
+	path := fmt.Sprintf("/api/history/period/%s?end_time=%s&significant_changes_only=true",
+		since.UTC().Format(time.RFC3339), until.UTC().Format(time.RFC3339))
+	var history [][]HAState
+	if err := c.get(ctx, path, &history); err != nil {
+		return nil, err
+	}
+	return history, nil
+}
+
 func (c *HAClient) GetHistory(ctx context.Context, entityID string, hours int) ([][]HAState, error) {
 	since := time.Now().Add(-time.Duration(hours) * time.Hour).Format(time.RFC3339)
 	path := fmt.Sprintf("/api/history/period/%s?filter_entity_id=%s&end_time=%s",
