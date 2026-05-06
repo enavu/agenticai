@@ -1,10 +1,10 @@
-import { Clock, GitBranch, Zap, Terminal, Lock, Rocket, Brain, Camera, DollarSign, Lightbulb, RefreshCw, Linkedin, Database, Activity, Plane } from 'lucide-react'
+import { Clock, GitBranch, Zap, Terminal, Lock, Rocket, Brain, Camera, DollarSign, Lightbulb, RefreshCw, Linkedin, Database, Activity, Plane, CreditCard } from 'lucide-react'
 
 const STATS = [
-  { label: 'Total active', value: '~17h' },
+  { label: 'Total active', value: '~18h' },
   { label: 'Planning phase', value: '~4h' },
-  { label: 'Build phase', value: '~13h' },
-  { label: 'Lines of code', value: '~9,000' },
+  { label: 'Build phase', value: '~14h' },
+  { label: 'Lines of code', value: '~10,000' },
   { label: 'Services', value: '5' },
   { label: 'Time span', value: '11 weeks' },
 ]
@@ -175,6 +175,25 @@ const SESSIONS = [
       'Unique index on (entity_id, changed_at) — safe to re-pull overlapping windows',
       'HA API error: "filter_entity_id is missing" — fixed with batched entity IDs (100/request)',
       '12,985 state changes captured in first 6h — every stair walk, door open, motion trigger',
+    ],
+  },
+  {
+    date: 'May 2026',
+    duration: '~1.5h',
+    icon: CreditCard,
+    color: 'text-green-400',
+    border: 'border-green-800/40',
+    bg: 'bg-green-900/10',
+    title: 'Plaid Spending Intelligence',
+    description: 'Built a credit card spending tracker with AI-powered analysis. Plaid Link connects Capital One, pulls 90 days of transactions, and stores them in Postgres. Claude then analyzes spending by category — top merchants, unusual patterns, and specific dollar-amount recommendations on where to cut back. Hit multiple Plaid environment walls during setup: sandbox only has fake banks, development.plaid.com doesn\'t resolve (DNS doesn\'t exist), and production requires Transactions product approval separately from account approval. Replaced the official Plaid Go SDK with raw HTTP calls after the SDK OOM-killed the Docker builder (auto-generated SDK is too large to compile in Docker\'s default memory).',
+    milestones: [
+      'PlaidClient service: raw net/http calls (no SDK — avoids Docker OOM on compilation)',
+      'plaid_items + plaid_transactions tables, BulkUpsertPlaidTransactions with ON CONFLICT',
+      'POST /api/v1/plaid/link-token + /exchange + /sync + GET /spending',
+      '/spending page: Plaid Link button, category breakdown bars, Claude\'s Take panel, transaction table',
+      'Fix: replaced plaid-go SDK with plain HTTP — SDK signal:killed Docker builder (too large)',
+      'Fix: development.plaid.com has no DNS — production.plaid.com is the correct URL',
+      'Pending: Plaid Transactions product approval (1-3 business days)',
     ],
   },
   {
