@@ -48,6 +48,7 @@ func main() {
 	aiClient := services.NewAnthropicClient(cfg.Anthropic.APIKey, cfg.Anthropic.Model)
 	igClient := services.NewInstagramClient(cfg.Instagram.AccessToken, cfg.Instagram.UserID)
 	scraperClient := services.NewScraperClient(cfg.ScraperURL)
+	plaidClient   := services.NewPlaidClient(cfg.Plaid.ClientID, cfg.Plaid.Secret, cfg.Plaid.Env)
 
 	// ─── Agents ──────────────────────────────────────────────────────────────
 	haAgent := agent.NewHAAgent(aiClient, haClient, db)
@@ -67,10 +68,11 @@ func main() {
 	uploadH  := handlers.NewUploadHandler(cfg.UploadDir, cfg.SiteURL)
 	financeH := handlers.NewFinanceHandler(db)
 	travelH  := handlers.NewTravelHandler(db, scraperClient)
+	plaidH   := handlers.NewPlaidHandler(db, plaidClient, aiClient)
 
 	// ─── Router ──────────────────────────────────────────────────────────────
 	router := gin.New()
-	setupRoutes(router, cfg.JWTSecret, authH, healthH, workoutH, homeH, postH, agentH, chatH, uploadH, financeH, travelH, cfg.UploadDir)
+	setupRoutes(router, cfg.JWTSecret, authH, healthH, workoutH, homeH, postH, agentH, chatH, uploadH, financeH, travelH, plaidH, cfg.UploadDir)
 
 	// ─── Scheduler (asynq) ───────────────────────────────────────────────────
 	scheduler := setupScheduler(cfg, db, scraperClient, contentAgent, haClient)

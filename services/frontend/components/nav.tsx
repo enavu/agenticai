@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { clsx } from 'clsx'
-import { Home, Dumbbell, Instagram, Bot, MessageSquare, LogIn, LogOut, MapPin, Layers, DollarSign, Lightbulb, Plane } from 'lucide-react'
+import { Home, Dumbbell, Instagram, Bot, MessageSquare, LogIn, LogOut, MapPin, Layers, DollarSign, Lightbulb, Plane, CreditCard } from 'lucide-react'
 
 const publicLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: Home },
@@ -20,6 +20,7 @@ const publicLinks = [
 const privateLinks = [
   { href: '/finance', label: 'Finance', icon: DollarSign },
   { href: '/travel', label: 'Travel', icon: Plane },
+  { href: '/spending', label: 'Spending', icon: CreditCard },
 ]
 
 function getCookie(name: string) {

@@ -10,6 +10,7 @@ type Config struct {
 	HA            HAConfig
 	Anthropic     AnthropicConfig
 	Instagram     InstagramConfig
+	Plaid         PlaidConfig
 	ScraperURL    string
 	JWTSecret     string
 	AdminEmail    string
@@ -33,6 +34,12 @@ type InstagramConfig struct {
 	UserID      string
 }
 
+type PlaidConfig struct {
+	ClientID string
+	Secret   string
+	Env      string // sandbox | development | production
+}
+
 func Load() *Config {
 	return &Config{
 		Env:         getEnv("ENV", "development"),
@@ -50,6 +57,11 @@ func Load() *Config {
 		Instagram: InstagramConfig{
 			AccessToken: getEnv("INSTAGRAM_ACCESS_TOKEN", ""),
 			UserID:      getEnv("INSTAGRAM_USER_ID", ""),
+		},
+		Plaid: PlaidConfig{
+			ClientID: getEnv("PLAID_CLIENT_ID", ""),
+			Secret:   getEnv("PLAID_SECRET", ""),
+			Env:      getEnv("PLAID_ENV", "sandbox"),
 		},
 		ScraperURL:    getEnv("SCRAPER_URL", "http://localhost:8001"),
 		JWTSecret:     getEnv("JWT_SECRET", "dev-secret"),

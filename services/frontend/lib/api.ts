@@ -127,6 +127,34 @@ export interface LeaseData {
   stats: LeaseStats | null
 }
 
+export interface PlaidTransaction {
+  id: string
+  item_id: string
+  account_id: string
+  amount: number
+  date: string
+  name: string
+  merchant_name: string
+  category: string[]
+  pending: boolean
+  created_at: string
+}
+
+export interface SpendingCategory {
+  category: string
+  total: number
+  count: number
+}
+
+export interface SpendingInsight {
+  connected: boolean
+  categories: SpendingCategory[]
+  ai_insights: string
+  period_days: number
+  total_spent: number
+  transactions: PlaidTransaction[]
+}
+
 export interface TravelPrice {
   id: string
   watch_id: string
@@ -199,6 +227,15 @@ export const api = {
 
   travel: {
     get: () => apiFetch<TravelData>('/api/v1/travel'),
+  },
+
+  plaid: {
+    linkToken: () => apiFetch<{ link_token: string }>('/api/v1/plaid/link-token', { method: 'POST' }),
+    exchange: (public_token: string) => apiFetch<{ institution: string; item_id: string }>(
+      '/api/v1/plaid/exchange', { method: 'POST', body: JSON.stringify({ public_token }) }
+    ),
+    sync: () => apiFetch<{ synced: number; stored: number }>('/api/v1/plaid/sync', { method: 'POST' }),
+    spending: () => apiFetch<SpendingInsight>('/api/v1/plaid/spending'),
   },
 
   finance: {

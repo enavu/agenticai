@@ -20,6 +20,7 @@ func setupRoutes(
 	upload  *handlers.UploadHandler,
 	finance *handlers.FinanceHandler,
 	travel  *handlers.TravelHandler,
+	plaidH  *handlers.PlaidHandler,
 	uploadDir string,
 ) {
 	r.Use(gin.Logger())
@@ -67,5 +68,10 @@ func setupRoutes(
 
 		priv.GET("/travel", travel.List)
 		priv.POST("/travel/check", travel.Check)
+
+		priv.POST("/plaid/link-token", plaidH.LinkToken)
+		priv.POST("/plaid/exchange", plaidH.Exchange)
+		priv.POST("/plaid/sync", plaidH.Sync)
+		priv.GET("/plaid/spending", plaidH.Spending)
 	}
 }

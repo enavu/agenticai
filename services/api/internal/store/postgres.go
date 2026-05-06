@@ -174,6 +174,30 @@ INSERT INTO travel_watches (id, type, label, config) VALUES
   ('watch-lisa-vegas-nov26', 'ticket', 'LISA — Las Vegas (Nov 13–14 2026)',
    '{"artist":"LISA","city":"Las Vegas","venue":"Colosseum at Caesars Palace","dates":"2026-11-13/2026-11-14"}'::jsonb)
 ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS plaid_items (
+    id               TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    item_id          TEXT NOT NULL UNIQUE,
+    access_token     TEXT NOT NULL,
+    institution_name TEXT NOT NULL DEFAULT '',
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS plaid_transactions (
+    id            TEXT PRIMARY KEY,
+    item_id       TEXT NOT NULL REFERENCES plaid_items(item_id) ON DELETE CASCADE,
+    account_id    TEXT NOT NULL,
+    amount        NUMERIC(12,2) NOT NULL,
+    date          DATE NOT NULL,
+    name          TEXT NOT NULL,
+    merchant_name TEXT NOT NULL DEFAULT '',
+    category      TEXT[] NOT NULL DEFAULT '{}',
+    pending       BOOLEAN NOT NULL DEFAULT false,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS plaid_transactions_date_idx ON plaid_transactions(date DESC);
+CREATE INDEX IF NOT EXISTS plaid_transactions_item_idx ON plaid_transactions(item_id, date DESC);
 `
 
 // ─── Workouts ─────────────────────────────────────────────────────────────────
@@ -636,4 +660,76 @@ func (s *Store) GetLeaseStats(ctx context.Context, agreementID string, totalAmou
 	}
 
 	return &stats, nil
+}
+
+// ─── Plaid ────────────────────────────────────────────────────────────────────
+
+func (s *Store) UpsertPlaidItem(ctx context.Context, itemID, accessToken, institutionName string) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO plaid_items (id, item_id, access_token, institution_name)
+		VALUES (gen_random_uuid()::text, $1, $2, $3)
+		ON CONFLICT (item_id) DO UPDATE SET access_token=$2, institution_name=$3`,
+		itemID, accessToken, institutionName)
+	return err
+}
+
+func (s *Store) GetPlaidItem(ctx context.Context) (*models.PlaidItem, error) {
+	var item models.PlaidItem
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, item_id, access_token, institution_name, created_at
+		FROM plaid_items ORDER BY created_at ASC LIMIT 1`).
+		Scan(&item.ID, &item.ItemID, &item.AccessToken, &item.InstitutionName, &item.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (s *Store) BulkUpsertPlaidTransactions(ctx context.Context, txns []models.PlaidTransaction) (int, error) {
+	if len(txns) == 0 {
+		return 0, nil
+	}
+	batch := &pgx.Batch{}
+	for _, t := range txns {
+		batch.Queue(`
+			INSERT INTO plaid_transactions
+			    (id, item_id, account_id, amount, date, name, merchant_name, category, pending)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+			ON CONFLICT (id) DO UPDATE SET
+			    amount=EXCLUDED.amount, pending=EXCLUDED.pending`,
+			t.ID, t.ItemID, t.AccountID, t.Amount, t.Date,
+			t.Name, t.MerchantName, t.Category, t.Pending)
+	}
+	br := s.pool.SendBatch(ctx, batch)
+	defer br.Close()
+	var inserted int
+	for range txns {
+		if _, err := br.Exec(); err == nil {
+			inserted++
+		}
+	}
+	return inserted, nil
+}
+
+func (s *Store) GetPlaidTransactions(ctx context.Context, days int) ([]models.PlaidTransaction, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, item_id, account_id, amount, date::text, name, merchant_name, category, pending, created_at
+		FROM plaid_transactions
+		WHERE date >= NOW() - make_interval(days => $1) AND pending = false
+		ORDER BY date DESC`, days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var txns []models.PlaidTransaction
+	for rows.Next() {
+		var t models.PlaidTransaction
+		if err := rows.Scan(&t.ID, &t.ItemID, &t.AccountID, &t.Amount, &t.Date,
+			&t.Name, &t.MerchantName, &t.Category, &t.Pending, &t.CreatedAt); err != nil {
+			return nil, err
+		}
+		txns = append(txns, t)
+	}
+	return txns, nil
 }

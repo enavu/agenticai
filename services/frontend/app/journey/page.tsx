@@ -1,12 +1,12 @@
-import { Clock, GitBranch, Zap, Terminal, Lock, Rocket, Brain, Camera, DollarSign, Lightbulb, RefreshCw, Linkedin, Database, Activity } from 'lucide-react'
+import { Clock, GitBranch, Zap, Terminal, Lock, Rocket, Brain, Camera, DollarSign, Lightbulb, RefreshCw, Linkedin, Database, Activity, Plane } from 'lucide-react'
 
 const STATS = [
-  { label: 'Total active', value: '~14h' },
+  { label: 'Total active', value: '~17h' },
   { label: 'Planning phase', value: '~4h' },
-  { label: 'Build phase', value: '~10h' },
-  { label: 'Lines of code', value: '~6,000' },
+  { label: 'Build phase', value: '~13h' },
+  { label: 'Lines of code', value: '~9,000' },
   { label: 'Services', value: '5' },
-  { label: 'Time span', value: '9 weeks' },
+  { label: 'Time span', value: '11 weeks' },
 ]
 
 const SESSIONS = [
@@ -178,6 +178,24 @@ const SESSIONS = [
     ],
   },
   {
+    date: 'May 2026',
+    duration: '~3h',
+    icon: Plane,
+    color: 'text-amber-400',
+    border: 'border-amber-800/40',
+    bg: 'bg-amber-900/10',
+    title: 'Travel Price Tracker',
+    description: 'Built a personal travel price tracker covering 5 watches: DEN→Paris flights, Celine Dion Paris tickets (Sep 16 & 18, 4 tickets), DEN→Baltimore flights, DEN→Las Vegas flights, and LISA Blackpink Vegas tickets (Nov 13 & 14). Hit Kayak anti-bot walls immediately — switched to Google Flights (works reliably). StubHub required a fresh Playwright browser per event page to avoid session contamination; used ?quantity=4 to filter 4-ticket pricing and a regex anchored on "incl. fees" to avoid picking up filter-slider prices. Found and fixed a 401 unauthorized bug where client-side fetches were going to localhost instead of the API — root cause was NEXT_PUBLIC_API_URL being set, causing remote browsers to hit a different origin and drop auth cookies. Fixed by switching to empty-string relative URLs on the client. Also fixed Cloudflare DNS for email: mail.enavu.io had no explicit A record and fell through to a proxied wildcard, routing email to Cloudflare IPs instead of Bluehost.',
+    milestones: [
+      '5 price watches: Paris flights, Celine tickets, Baltimore flights, LV flights, LISA tickets',
+      'Google Flights scrapers (bypassed Kayak anti-bot — zero code change needed to switch)',
+      'StubHub: fresh async_playwright() per event, ?quantity=4, incl. fees regex for clean price extraction',
+      'Daily 9am asynq cron + manual "Run Check" button with spinner on /travel page',
+      'Fix: typeof window === undefined → relative client URLs → fixed 401 from remote browsers',
+      'Fix: Cloudflare DNS — added mail A record DNS-only → 50.116.65.218 (Bluehost), email restored',
+    ],
+  },
+  {
     date: 'Apr 14, 2026',
     duration: '~20 min',
     icon: Terminal,
@@ -203,10 +221,10 @@ export default function JourneyPage() {
       <div>
         <h1 className="text-2xl font-bold text-white">Build Journey</h1>
         <p className="text-sm text-neutral-400 mt-1 max-w-2xl">
-          enavu-hub was built entirely with Claude Code across 5 weeks.
-          The first 4 weeks were architecture and planning — short daily sessions using Claude's full context window to design the system,
-          write ADRs, and think through tradeoffs. The final week was implementation: ~5 hours of actual coding to bring it all to life.
-          Total active time: <span className="text-white">~9 hours</span>, calculated from Claude conversation log timestamps
+          enavu-hub is built entirely with Claude Code. The first 4 weeks were architecture and planning — short daily sessions
+          using Claude's full context window to design the system, write ADRs, and think through tradeoffs.
+          Implementation started in week 5 and continues today: new scrapers, AI agents, and integrations added each week.
+          Total active time: <span className="text-white">~17 hours</span>, calculated from Claude conversation log timestamps
           using the same method as these session durations.
         </p>
       </div>
