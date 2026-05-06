@@ -53,6 +53,7 @@ func main() {
 	// ─── Agents ──────────────────────────────────────────────────────────────
 	haAgent := agent.NewHAAgent(aiClient, haClient, db)
 	contentAgent := agent.NewContentAgent(aiClient, igClient, db)
+	insightAgent := agent.NewHAInsightAgent(aiClient, db)
 
 	// ─── WebSocket hub ───────────────────────────────────────────────────────
 	hub := ws.NewHub()
@@ -67,15 +68,16 @@ func main() {
 	chatH    := handlers.NewChatHandler(hub, haAgent, db)
 	uploadH  := handlers.NewUploadHandler(cfg.UploadDir, cfg.SiteURL)
 	financeH := handlers.NewFinanceHandler(db)
-	travelH  := handlers.NewTravelHandler(db, scraperClient)
-	plaidH   := handlers.NewPlaidHandler(db, plaidClient, aiClient)
+	travelH   := handlers.NewTravelHandler(db, scraperClient)
+	plaidH    := handlers.NewPlaidHandler(db, plaidClient, aiClient)
+	insightH  := handlers.NewInsightHandler(db, insightAgent)
 
 	// ─── Router ──────────────────────────────────────────────────────────────
 	router := gin.New()
-	setupRoutes(router, cfg.JWTSecret, authH, healthH, workoutH, homeH, postH, agentH, chatH, uploadH, financeH, travelH, plaidH, cfg.UploadDir)
+	setupRoutes(router, cfg.JWTSecret, authH, healthH, workoutH, homeH, postH, agentH, chatH, uploadH, financeH, travelH, plaidH, insightH, cfg.UploadDir)
 
 	// ─── Scheduler (asynq) ───────────────────────────────────────────────────
-	scheduler := setupScheduler(cfg, db, scraperClient, contentAgent, haClient)
+	scheduler := setupScheduler(cfg, db, scraperClient, contentAgent, haClient, insightAgent)
 	if err := scheduler.Start(); err != nil {
 		log.Printf("Warning: scheduler failed to start: %v", err)
 	}
@@ -108,7 +110,7 @@ func main() {
 }
 
 // setupScheduler wires up cron jobs via asynq.
-func setupScheduler(cfg *config.Config, db *store.Store, scraper *services.ScraperClient, contentAgent *agent.ContentAgent, ha *services.HAClient) *asynq.Scheduler {
+func setupScheduler(cfg *config.Config, db *store.Store, scraper *services.ScraperClient, contentAgent *agent.ContentAgent, ha *services.HAClient, insightAgent *agent.HAInsightAgent) *asynq.Scheduler {
 	redisOpt := asynq.RedisClientOpt{Addr: redisAddr(cfg.RedisURL)}
 	scheduler := asynq.NewScheduler(redisOpt, &asynq.SchedulerOpts{
 		Location: time.Local,
@@ -126,13 +128,16 @@ func setupScheduler(cfg *config.Config, db *store.Store, scraper *services.Scrap
 	// Daily 9am: check travel prices
 	scheduler.Register("0 9 * * *", asynq.NewTask("travel:check", nil))
 
+	// Daily 8am: generate life pattern insight
+	scheduler.Register("0 8 * * *", asynq.NewTask("ha:insight", nil))
+
 	// Start worker to process tasks
-	go runWorker(cfg, db, scraper, contentAgent, ha)
+	go runWorker(cfg, db, scraper, contentAgent, ha, insightAgent)
 
 	return scheduler
 }
 
-func runWorker(cfg *config.Config, db *store.Store, scraper *services.ScraperClient, contentAgent *agent.ContentAgent, ha *services.HAClient) {
+func runWorker(cfg *config.Config, db *store.Store, scraper *services.ScraperClient, contentAgent *agent.ContentAgent, ha *services.HAClient, insightAgent *agent.HAInsightAgent) {
 	redisOpt := asynq.RedisClientOpt{Addr: redisAddr(cfg.RedisURL)}
 	srv := asynq.NewServer(redisOpt, asynq.Config{
 		Concurrency: 2,
@@ -324,6 +329,12 @@ func runWorker(cfg *config.Config, db *store.Store, scraper *services.ScraperCli
 		}
 
 		return nil
+	})
+
+	mux.HandleFunc("ha:insight", func(ctx context.Context, t *asynq.Task) error {
+		yesterday := time.Now().AddDate(0, 0, -1)
+		log.Printf("Scheduled: generating HA life pattern insight for %s", yesterday.Format("2006-01-02"))
+		return insightAgent.Run(ctx, yesterday)
 	})
 
 	if err := srv.Run(mux); err != nil {

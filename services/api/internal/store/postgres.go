@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -198,6 +199,16 @@ CREATE TABLE IF NOT EXISTS plaid_transactions (
 
 CREATE INDEX IF NOT EXISTS plaid_transactions_date_idx ON plaid_transactions(date DESC);
 CREATE INDEX IF NOT EXISTS plaid_transactions_item_idx ON plaid_transactions(item_id, date DESC);
+
+CREATE TABLE IF NOT EXISTS ha_insights (
+    id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    date        DATE NOT NULL UNIQUE,
+    summary     TEXT NOT NULL,
+    raw_data    JSONB,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ha_insights_date_idx ON ha_insights(date DESC);
 `
 
 // ─── Workouts ─────────────────────────────────────────────────────────────────
@@ -660,6 +671,110 @@ func (s *Store) GetLeaseStats(ctx context.Context, agreementID string, totalAmou
 	}
 
 	return &stats, nil
+}
+
+// ─── HA Insights ─────────────────────────────────────────────────────────────
+
+func (s *Store) UpsertHAInsight(ctx context.Context, date, summary string) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO ha_insights (date, summary)
+		VALUES ($1, $2)
+		ON CONFLICT (date) DO UPDATE SET summary = EXCLUDED.summary`,
+		date, summary)
+	return err
+}
+
+func (s *Store) ListHAInsights(ctx context.Context, limit int) ([]models.HAInsight, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, date::text, summary, created_at
+		FROM ha_insights ORDER BY date DESC LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var insights []models.HAInsight
+	for rows.Next() {
+		var i models.HAInsight
+		if err := rows.Scan(&i.ID, &i.Date, &i.Summary, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		insights = append(insights, i)
+	}
+	return insights, nil
+}
+
+// GetHAActivitySummary pulls a condensed view of state changes for a time window,
+// grouped by entity category (motion, door, light, climate, lock).
+func (s *Store) GetHAActivitySummary(ctx context.Context, from, to time.Time) (map[string][]map[string]string, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT entity_id, state, changed_at
+		FROM ha_state_changes
+		WHERE changed_at BETWEEN $1 AND $2
+		  AND (
+		    entity_id ILIKE '%motion%'   OR
+		    entity_id ILIKE '%occupancy%' OR
+		    entity_id ILIKE '%door%'     OR
+		    entity_id ILIKE '%contact%'  OR
+		    entity_id ILIKE '%lock%'     OR
+		    entity_id ILIKE '%light%'    OR
+		    entity_id ILIKE '%climate%'  OR
+		    entity_id ILIKE '%temperature%' OR
+		    entity_id ILIKE '%person%'   OR
+		    entity_id ILIKE '%presence%'
+		  )
+		ORDER BY changed_at ASC`, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := map[string][]map[string]string{
+		"motion":  {},
+		"door":    {},
+		"lock":    {},
+		"light":   {},
+		"climate": {},
+		"person":  {},
+	}
+
+	for rows.Next() {
+		var entityID, state string
+		var changedAt time.Time
+		if err := rows.Scan(&entityID, &state, &changedAt); err != nil {
+			return nil, err
+		}
+		entry := map[string]string{
+			"entity":  entityID,
+			"state":   state,
+			"time":    changedAt.Format("15:04"),
+		}
+		switch {
+		case containsAny(entityID, "motion", "occupancy"):
+			result["motion"] = append(result["motion"], entry)
+		case containsAny(entityID, "door", "contact"):
+			result["door"] = append(result["door"], entry)
+		case containsAny(entityID, "lock"):
+			result["lock"] = append(result["lock"], entry)
+		case containsAny(entityID, "light"):
+			result["light"] = append(result["light"], entry)
+		case containsAny(entityID, "climate", "temperature"):
+			result["climate"] = append(result["climate"], entry)
+		case containsAny(entityID, "person", "presence"):
+			result["person"] = append(result["person"], entry)
+		}
+	}
+	return result, nil
+}
+
+func containsAny(s string, subs ...string) bool {
+	sl := strings.ToLower(s)
+	for _, sub := range subs {
+		if strings.Contains(sl, sub) {
+			return true
+		}
+	}
+	return false
 }
 
 // ─── Plaid ────────────────────────────────────────────────────────────────────
