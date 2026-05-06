@@ -127,7 +127,7 @@ const LIFE_INTELLIGENCE: typeof IDEAS = [
     badge: 'bg-cyan-900/40 text-cyan-300 border-cyan-700/50',
     title: 'HA State Historian',
     tag: 'Foundation · Build First',
-    status: 'planned',
+    status: 'done',
     description:
       'Snapshot Home Assistant state to Postgres every 15–30 minutes. Without this, there is no history — just what\'s on right now. Everything else in the life intelligence stack depends on this data existing.',
     why: 'The current HA integration only reads live state. You can ask "what lights are on?" but not "what was on at 10pm last Tuesday?" Pattern learning, anomaly detection, and briefings all need a historical record.',
@@ -150,7 +150,7 @@ const LIFE_INTELLIGENCE: typeof IDEAS = [
     badge: 'bg-violet-900/40 text-violet-300 border-violet-700/50',
     title: 'Life Pattern Observer',
     tag: 'Life Intelligence',
-    status: 'planned',
+    status: 'done',
     description:
       'Runs on a schedule, queries the HA history, and Claude narrates what it sees in plain English. Observations accumulate in Postgres — a growing log of learned facts about your life at home.',
     why: 'You have 505 devices generating continuous state data but no intelligence layer reading it. This turns raw device history into legible patterns: when you\'re home, your routines, how your space is actually used.',

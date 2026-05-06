@@ -1,10 +1,10 @@
-import { Clock, GitBranch, Zap, Terminal, Lock, Rocket, Brain, Camera, DollarSign, Lightbulb, RefreshCw, Linkedin, Database, Activity, Plane, CreditCard } from 'lucide-react'
+import { Clock, GitBranch, Zap, Terminal, Lock, Rocket, Brain, Camera, DollarSign, Lightbulb, RefreshCw, Linkedin, Database, Activity, Plane, CreditCard, Sparkles } from 'lucide-react'
 
 const STATS = [
-  { label: 'Total active', value: '~18h' },
+  { label: 'Total active', value: '~19h' },
   { label: 'Planning phase', value: '~4h' },
-  { label: 'Build phase', value: '~14h' },
-  { label: 'Lines of code', value: '~10,000' },
+  { label: 'Build phase', value: '~15h' },
+  { label: 'Lines of code', value: '~11,000' },
   { label: 'Services', value: '5' },
   { label: 'Time span', value: '11 weeks' },
 ]
@@ -215,6 +215,25 @@ const SESSIONS = [
     ],
   },
   {
+    date: 'May 2026',
+    duration: '~1h',
+    icon: Sparkles,
+    color: 'text-violet-400',
+    border: 'border-violet-800/40',
+    bg: 'bg-violet-900/10',
+    title: 'Life Pattern Observer',
+    description: 'Built a daily AI briefing system on top of the HA history data. A new agent (HAInsightAgent) runs every morning at 8am, pulls the previous 24 hours of state changes, groups them by category (motion, doors, locks, lights, climate, audio), and sends them to Claude to narrate in plain English — like a personal daily digest. Claude is instructed to use times, not sensor IDs, and to be specific about what actually happened. Briefings are stored in a ha_insights table with a DATE UNIQUE constraint so re-runs are idempotent. Also added 7 days of prior briefings as context so Claude can spot week-over-week patterns. Accessible at /insights (auth-only), with a "Generate Now" button for on-demand runs.',
+    milestones: [
+      'HAInsightAgent: pulls 24h HA state changes, categorizes by motion/door/lock/light/climate/audio',
+      'Claude prompt: "Write a natural paragraph or two — like a personal daily digest. Be specific with times."',
+      'ha_insights table with DATE UNIQUE — idempotent re-runs safe',
+      '7-day prior briefings loaded as context for week-over-week pattern detection',
+      '/insights page: timeline of briefings, Generate Now button, empty state instructions',
+      'Daily 8am asynq cron + POST /api/v1/home/insights/generate for manual trigger',
+      'Sparkles nav icon in privateLinks (auth-only)',
+    ],
+  },
+  {
     date: 'Apr 14, 2026',
     duration: '~20 min',
     icon: Terminal,
@@ -243,7 +262,7 @@ export default function JourneyPage() {
           enavu-hub is built entirely with Claude Code. The first 4 weeks were architecture and planning — short daily sessions
           using Claude's full context window to design the system, write ADRs, and think through tradeoffs.
           Implementation started in week 5 and continues today: new scrapers, AI agents, and integrations added each week.
-          Total active time: <span className="text-white">~17 hours</span>, calculated from Claude conversation log timestamps
+          Total active time: <span className="text-white">~19 hours</span>, calculated from Claude conversation log timestamps
           using the same method as these session durations.
         </p>
       </div>
