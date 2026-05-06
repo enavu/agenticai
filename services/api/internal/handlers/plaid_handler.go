@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 
 	"enavu-hub/api/internal/models"
@@ -227,11 +227,9 @@ Based on this spending data, give me 3-5 concise, actionable insights about:
 Be direct and specific. No fluff. Format as bullet points. Each bullet should be 1-2 sentences max.`
 
 	msg, err := ai.CreateMessage(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.F(ai.Model()),
-		MaxTokens: anthropic.F(int64(1024)),
-		Messages: anthropic.F([]anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
-		}),
+		Model:     anthropic.Model(ai.Model()),
+		MaxTokens: 1024,
+		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(prompt))},
 	})
 	if err != nil {
 		log.Printf("Plaid AI insights: %v", err)
