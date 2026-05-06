@@ -102,14 +102,6 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS ha_snapshots (
-    id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    state_json JSONB NOT NULL,
-    captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS ha_snapshots_captured_at_idx ON ha_snapshots(captured_at DESC);
-
 CREATE TABLE IF NOT EXISTS ha_state_changes (
     id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     entity_id   TEXT NOT NULL,
@@ -149,6 +141,39 @@ CREATE TABLE IF NOT EXISTS lease_payments (
     notes            TEXT NOT NULL DEFAULT '',
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS travel_watches (
+    id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    type        TEXT NOT NULL,
+    label       TEXT NOT NULL,
+    config      JSONB NOT NULL,
+    active      BOOLEAN NOT NULL DEFAULT true,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS travel_prices (
+    id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    watch_id    TEXT NOT NULL REFERENCES travel_watches(id),
+    price       NUMERIC(10,2) NOT NULL,
+    currency    TEXT NOT NULL DEFAULT 'USD',
+    details     JSONB,
+    checked_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS travel_prices_watch_checked_idx ON travel_prices(watch_id, checked_at DESC);
+
+INSERT INTO travel_watches (id, type, label, config) VALUES
+  ('watch-den-cdg-sep26', 'flight', 'DEN → Paris (Sep 2026)',
+   '{"origin":"DEN","destination":"CDG","month":"2026-09"}'::jsonb),
+  ('watch-celine-paris-sep26', 'ticket', 'Celine Dion — Paris (Sep 2026)',
+   '{"artist":"Celine Dion","city":"Paris","month":"2026-09"}'::jsonb),
+  ('watch-den-bwi-aug26', 'flight', 'DEN → Baltimore (Aug 8–12 2026)',
+   '{"origin":"DEN","destination":"BWI","dates":"2026-08-08/2026-08-12"}'::jsonb),
+  ('watch-den-las-nov26', 'flight', 'DEN → Las Vegas (Nov 13–14 2026)',
+   '{"origin":"DEN","destination":"LAS","dates":"2026-11-13/2026-11-14"}'::jsonb),
+  ('watch-lisa-vegas-nov26', 'ticket', 'LISA — Las Vegas (Nov 13–14 2026)',
+   '{"artist":"LISA","city":"Las Vegas","venue":"Colosseum at Caesars Palace","dates":"2026-11-13/2026-11-14"}'::jsonb)
+ON CONFLICT (id) DO NOTHING;
 `
 
 // ─── Workouts ─────────────────────────────────────────────────────────────────
@@ -376,38 +401,6 @@ func (s *Store) GetConversationMessages(ctx context.Context, convID string) ([]m
 	return msgs, nil
 }
 
-// ─── HA Snapshots ─────────────────────────────────────────────────────────────
-
-func (s *Store) CreateHASnapshot(ctx context.Context, stateJSON []byte) error {
-	_, err := s.pool.Exec(ctx, `INSERT INTO ha_snapshots (state_json) VALUES ($1)`, stateJSON)
-	return err
-}
-
-func (s *Store) ListHASnapshots(ctx context.Context, hours, limit int) ([]models.HASnapshot, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT id, state_json, captured_at
-		FROM ha_snapshots
-		WHERE captured_at >= NOW() - make_interval(hours => $1)
-		ORDER BY captured_at DESC
-		LIMIT $2`, hours, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var snapshots []models.HASnapshot
-	for rows.Next() {
-		var snap models.HASnapshot
-		var raw []byte
-		if err := rows.Scan(&snap.ID, &raw, &snap.CapturedAt); err != nil {
-			return nil, err
-		}
-		json.Unmarshal(raw, &snap.States)
-		snapshots = append(snapshots, snap)
-	}
-	return snapshots, nil
-}
-
 // ─── HA State Changes ─────────────────────────────────────────────────────────
 
 func (s *Store) GetLatestHAChangeTime(ctx context.Context) (time.Time, error) {
@@ -552,6 +545,66 @@ func (s *Store) UpdateLeasePayment(ctx context.Context, id string, amountExpecte
 		WHERE id=$7`,
 		amountExpected, amountPaid, dueDate, paidDate, string(status), notes, id)
 	return err
+}
+
+// ─── Travel ───────────────────────────────────────────────────────────────────
+
+func (s *Store) GetTravelWatches(ctx context.Context) ([]models.TravelWatch, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, type, label, config, active, created_at
+		FROM travel_watches WHERE active = true ORDER BY created_at ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var watches []models.TravelWatch
+	for rows.Next() {
+		var w models.TravelWatch
+		var configJSON []byte
+		if err := rows.Scan(&w.ID, &w.Type, &w.Label, &configJSON, &w.Active, &w.CreatedAt); err != nil {
+			return nil, err
+		}
+		json.Unmarshal(configJSON, &w.Config)
+		watches = append(watches, w)
+	}
+	return watches, nil
+}
+
+func (s *Store) AddTravelPrice(ctx context.Context, p models.TravelPrice) error {
+	if p.ID == "" {
+		p.ID = uuid.NewString()
+	}
+	detailsJSON, _ := json.Marshal(p.Details)
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO travel_prices (id, watch_id, price, currency, details, checked_at)
+		VALUES ($1, $2, $3, $4, $5, NOW())`,
+		p.ID, p.WatchID, p.Price, p.Currency, detailsJSON)
+	return err
+}
+
+func (s *Store) GetPriceHistory(ctx context.Context, watchID string, days int) ([]models.TravelPrice, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, watch_id, price, currency, details, checked_at
+		FROM travel_prices
+		WHERE watch_id = $1 AND checked_at >= NOW() - make_interval(days => $2)
+		ORDER BY checked_at DESC`, watchID, days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var prices []models.TravelPrice
+	for rows.Next() {
+		var p models.TravelPrice
+		var detailsJSON []byte
+		if err := rows.Scan(&p.ID, &p.WatchID, &p.Price, &p.Currency, &detailsJSON, &p.CheckedAt); err != nil {
+			return nil, err
+		}
+		json.Unmarshal(detailsJSON, &p.Details)
+		prices = append(prices, p)
+	}
+	return prices, nil
 }
 
 func (s *Store) GetLeaseStats(ctx context.Context, agreementID string, totalAmount float64) (*models.LeaseStats, error) {

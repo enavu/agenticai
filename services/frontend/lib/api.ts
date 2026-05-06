@@ -1,4 +1,8 @@
-const API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+// Server-side (SSR): use internal Docker hostname. Client-side: use relative URL
+// so requests go through Caddy on the same origin and cookies are sent correctly.
+const API_URL = typeof window === 'undefined'
+  ? (process.env.API_URL || 'http://api:8080')
+  : ''
 export const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080'
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -123,6 +127,27 @@ export interface LeaseData {
   stats: LeaseStats | null
 }
 
+export interface TravelPrice {
+  id: string
+  watch_id: string
+  price: number
+  currency: string
+  details: Record<string, unknown>
+  checked_at: string
+}
+
+export interface TravelWatch {
+  id: string
+  label: string
+  type: 'flight' | 'ticket'
+  latest_price: number | null
+  history: TravelPrice[]
+}
+
+export interface TravelData {
+  watches: TravelWatch[]
+}
+
 // ─── API functions ────────────────────────────────────────────────────────────
 
 export const api = {
@@ -170,6 +195,10 @@ export const api = {
   agents: {
     runs: () => apiFetch<{ runs: AgentRun[] }>('/api/v1/agents/runs'),
     run: (id: string) => apiFetch<AgentRun>(`/api/v1/agents/runs/${id}`),
+  },
+
+  travel: {
+    get: () => apiFetch<TravelData>('/api/v1/travel'),
   },
 
   finance: {

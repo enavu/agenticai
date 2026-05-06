@@ -1,9 +1,6 @@
 package config
 
-import (
-	"os"
-	"strconv"
-)
+import "os"
 
 type Config struct {
 	Env           string
@@ -70,14 +67,6 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-func getEnvAsInt(key string, fallback int) int {
-	if v := os.Getenv(key); v != "" {
-		if i, err := strconv.Atoi(v); err == nil {
-			return i
-		}
-	}
-	return fallback
-}
 
 func (c *Config) IsProd() bool {
 	return c.Env == "production"

@@ -19,6 +19,7 @@ func setupRoutes(
 	chat    *handlers.ChatHandler,
 	upload  *handlers.UploadHandler,
 	finance *handlers.FinanceHandler,
+	travel  *handlers.TravelHandler,
 	uploadDir string,
 ) {
 	r.Use(gin.Logger())
@@ -63,5 +64,8 @@ func setupRoutes(
 		priv.POST("/finance/setup", finance.Setup)
 		priv.POST("/finance/payments", finance.LogPayment)
 		priv.PUT("/finance/payments/:id", finance.UpdatePayment)
+
+		priv.GET("/travel", travel.List)
+		priv.POST("/travel/check", travel.Check)
 	}
 }

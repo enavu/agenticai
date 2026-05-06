@@ -9,6 +9,11 @@ from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 
 from scrapers.cyclebar import scrape_workouts
+from scrapers.kayak_flights import scrape_flights
+from scrapers.stubhub_tickets import scrape_tickets
+from scrapers.baltimore_flights import scrape_baltimore_flights
+from scrapers.lasvegas_flights import scrape_lasvegas_flights
+from scrapers.lisa_tickets import scrape_lisa_tickets
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -52,6 +57,16 @@ class ScrapeResponse(BaseModel):
     error: str | None = None
 
 
+class PriceResult(BaseModel):
+    price: float
+    details: dict = {}
+
+
+class TravelScrapeResponse(BaseModel):
+    prices: list[PriceResult]
+    error: str | None = None
+
+
 @app.get("/health")
 async def health():
     return {
@@ -83,3 +98,68 @@ async def scrape_cyclebar():
     except Exception as e:
         logger.error(f"Scrape failed: {e}", exc_info=True)
         return ScrapeResponse(workouts=[], error=str(e))
+
+
+@app.post("/scrape/flights", response_model=TravelScrapeResponse)
+async def scrape_flights_endpoint():
+    try:
+        logger.info("Starting Kayak flight scrape")
+        raw = await scrape_flights()
+        prices = [PriceResult(**p) for p in raw]
+        logger.info(f"Flight scrape complete: {len(prices)} results")
+        return TravelScrapeResponse(prices=prices)
+    except Exception as e:
+        logger.error(f"Flight scrape failed: {e}", exc_info=True)
+        return TravelScrapeResponse(prices=[], error=str(e))
+
+
+@app.post("/scrape/flights/baltimore", response_model=TravelScrapeResponse)
+async def scrape_baltimore_flights_endpoint():
+    try:
+        logger.info("Starting Baltimore flight scrape")
+        raw = await scrape_baltimore_flights()
+        prices = [PriceResult(**p) for p in raw]
+        logger.info(f"Baltimore flight scrape complete: {len(prices)} results")
+        return TravelScrapeResponse(prices=prices)
+    except Exception as e:
+        logger.error(f"Baltimore flight scrape failed: {e}", exc_info=True)
+        return TravelScrapeResponse(prices=[], error=str(e))
+
+
+@app.post("/scrape/flights/lasvegas", response_model=TravelScrapeResponse)
+async def scrape_lasvegas_flights_endpoint():
+    try:
+        logger.info("Starting Las Vegas flight scrape")
+        raw = await scrape_lasvegas_flights()
+        prices = [PriceResult(**p) for p in raw]
+        logger.info(f"Las Vegas flight scrape complete: {len(prices)} results")
+        return TravelScrapeResponse(prices=prices)
+    except Exception as e:
+        logger.error(f"Las Vegas flight scrape failed: {e}", exc_info=True)
+        return TravelScrapeResponse(prices=[], error=str(e))
+
+
+@app.post("/scrape/tickets/lisa", response_model=TravelScrapeResponse)
+async def scrape_lisa_tickets_endpoint():
+    try:
+        logger.info("Starting Lisa StubHub scrape")
+        raw = await scrape_lisa_tickets()
+        prices = [PriceResult(**p) for p in raw]
+        logger.info(f"Lisa ticket scrape complete: {len(prices)} results")
+        return TravelScrapeResponse(prices=prices)
+    except Exception as e:
+        logger.error(f"Lisa ticket scrape failed: {e}", exc_info=True)
+        return TravelScrapeResponse(prices=[], error=str(e))
+
+
+@app.post("/scrape/tickets", response_model=TravelScrapeResponse)
+async def scrape_tickets_endpoint():
+    try:
+        logger.info("Starting StubHub ticket scrape")
+        raw = await scrape_tickets()
+        prices = [PriceResult(**p) for p in raw]
+        logger.info(f"Ticket scrape complete: {len(prices)} results")
+        return TravelScrapeResponse(prices=prices)
+    except Exception as e:
+        logger.error(f"Ticket scrape failed: {e}", exc_info=True)
+        return TravelScrapeResponse(prices=[], error=str(e))

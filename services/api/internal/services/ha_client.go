@@ -162,13 +162,37 @@ func (c *HAClient) RunAutomation(ctx context.Context, automationID string) error
 }
 
 func (c *HAClient) GetHistoryRange(ctx context.Context, since, until time.Time) ([][]HAState, error) {
-	path := fmt.Sprintf("/api/history/period/%s?end_time=%s&significant_changes_only=true",
-		since.UTC().Format(time.RFC3339), until.UTC().Format(time.RFC3339))
-	var history [][]HAState
-	if err := c.get(ctx, path, &history); err != nil {
-		return nil, err
+	// HA requires filter_entity_id — fetch all entity IDs first then batch
+	states, err := c.GetAllStates(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get entity ids: %w", err)
 	}
-	return history, nil
+
+	entityIDs := make([]string, len(states))
+	for i, s := range states {
+		entityIDs[i] = s.EntityID
+	}
+
+	const batchSize = 100
+	sinceStr := since.UTC().Format(time.RFC3339)
+	untilStr := until.UTC().Format(time.RFC3339)
+
+	var allHistory [][]HAState
+	for i := 0; i < len(entityIDs); i += batchSize {
+		end := i + batchSize
+		if end > len(entityIDs) {
+			end = len(entityIDs)
+		}
+		batch := entityIDs[i:end]
+		path := fmt.Sprintf("/api/history/period/%s?filter_entity_id=%s&end_time=%s",
+			sinceStr, strings.Join(batch, ","), untilStr)
+		var history [][]HAState
+		if err := c.get(ctx, path, &history); err != nil {
+			return nil, err
+		}
+		allHistory = append(allHistory, history...)
+	}
+	return allHistory, nil
 }
 
 func (c *HAClient) GetHistory(ctx context.Context, entityID string, hours int) ([][]HAState, error) {

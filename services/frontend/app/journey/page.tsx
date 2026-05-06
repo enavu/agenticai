@@ -1,12 +1,12 @@
-import { Clock, GitBranch, Zap, Terminal, Lock, Rocket, Brain, Camera, DollarSign, Lightbulb, RefreshCw, Linkedin, Database } from 'lucide-react'
+import { Clock, GitBranch, Zap, Terminal, Lock, Rocket, Brain, Camera, DollarSign, Lightbulb, RefreshCw, Linkedin, Database, Activity } from 'lucide-react'
 
 const STATS = [
-  { label: 'Total active', value: '~12h' },
+  { label: 'Total active', value: '~14h' },
   { label: 'Planning phase', value: '~4h' },
-  { label: 'Build phase', value: '~8h' },
-  { label: 'Lines of code', value: '~5,500' },
+  { label: 'Build phase', value: '~10h' },
+  { label: 'Lines of code', value: '~6,000' },
   { label: 'Services', value: '5' },
-  { label: 'Time span', value: '8 weeks' },
+  { label: 'Time span', value: '9 weeks' },
 ]
 
 const SESSIONS = [
@@ -148,15 +148,33 @@ const SESSIONS = [
     color: 'text-cyan-400',
     border: 'border-cyan-800/40',
     bg: 'bg-cyan-900/10',
-    title: 'HA State Historian — 782 Devices, Every 15 Min',
-    description: 'Foundation of the Life Intelligence stack. Added a cron job that snapshots all 782 Home Assistant entities to Postgres every 15 minutes — security cameras, motion sensors, door contacts, automations, audio detectors, climate, lights. First snapshot ran at 15:15 UTC. By tomorrow: ~96 snapshots. By next week: enough data for Claude to start reading patterns in how the home actually lives.',
+    title: 'HA State Historian — Foundation Build',
+    description: 'Foundation of the Life Intelligence stack. Added a cron job that snapshots all 782 Home Assistant entities to Postgres every 15 minutes — security cameras, motion sensors, door contacts, automations, audio detectors, climate, lights. First snapshot ran at 15:15 UTC. Initial approach: full state JSONB blob every 15 min. Later upgraded to event-driven history pulls.',
     milestones: [
-      'ha_snapshots table already in schema — added captured_at index for fast time-range queries',
-      'CreateHASnapshot / ListHASnapshots store methods',
-      'ha:snapshot asynq cron (*/15 * * * *) → GetAllStates → JSONB → Postgres',
-      'GET /api/v1/home/history?hours=24&limit=96 endpoint wired',
-      'First snapshot: 782 entities captured — cameras, sensors, doors, automations, microphones',
+      'ha_snapshots + ha_state_changes tables in schema with indexes',
+      'BulkInsertHAStateChanges with pgx.Batch + ON CONFLICT DO NOTHING (idempotent)',
+      'ha:snapshot asynq cron (*/15 * * * *) wired to asynq scheduler',
+      'GET /api/v1/home/history endpoint with entity filter + time range',
+      'First snapshot: 782 entities — cameras, sensors, doors, automations, microphones',
       'Unlocks: Life Pattern Observer, Morning Briefing, Proactive Suggestions, Anomaly Detector',
+    ],
+  },
+  {
+    date: 'Apr 27–28, 2026',
+    duration: '~2.5h',
+    icon: Activity,
+    color: 'text-teal-400',
+    border: 'border-teal-800/40',
+    bg: 'bg-teal-900/10',
+    title: 'Todos Page + Event-Driven HA Historian',
+    description: 'Built a Todos page tracking 10 ideas across two tracks: AI & Infrastructure and Life Intelligence. Then upgraded the HA historian from 15-min state snapshots to pulling HA\'s built-in history API — which records every state change at the exact second it happened. Hit a wall: HA\'s newer API requires filter_entity_id and rejects all-entity queries. Fixed with batched entity pulls (100 entities per request, 8 batches). Result: 12,985 state changes in the first 6 hours, 258–469 changes per 15-min window.',
+    milestones: [
+      'Todos page: 10 tracked ideas (AI & Infrastructure + Life Intelligence groups)',
+      'Public nav link for Todos (Lightbulb icon)',
+      'Switched ha:snapshot from GetAllStates JSONB blob to GetHistoryRange event pull',
+      'Unique index on (entity_id, changed_at) — safe to re-pull overlapping windows',
+      'HA API error: "filter_entity_id is missing" — fixed with batched entity IDs (100/request)',
+      '12,985 state changes captured in first 6h — every stair walk, door open, motion trigger',
     ],
   },
   {

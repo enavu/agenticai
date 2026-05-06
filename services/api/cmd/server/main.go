@@ -66,10 +66,11 @@ func main() {
 	chatH    := handlers.NewChatHandler(hub, haAgent, db)
 	uploadH  := handlers.NewUploadHandler(cfg.UploadDir, cfg.SiteURL)
 	financeH := handlers.NewFinanceHandler(db)
+	travelH  := handlers.NewTravelHandler(db, scraperClient)
 
 	// ─── Router ──────────────────────────────────────────────────────────────
 	router := gin.New()
-	setupRoutes(router, cfg.JWTSecret, authH, healthH, workoutH, homeH, postH, agentH, chatH, uploadH, financeH, cfg.UploadDir)
+	setupRoutes(router, cfg.JWTSecret, authH, healthH, workoutH, homeH, postH, agentH, chatH, uploadH, financeH, travelH, cfg.UploadDir)
 
 	// ─── Scheduler (asynq) ───────────────────────────────────────────────────
 	scheduler := setupScheduler(cfg, db, scraperClient, contentAgent, haClient)
@@ -120,6 +121,9 @@ func setupScheduler(cfg *config.Config, db *store.Store, scraper *services.Scrap
 	// Every 15 min: snapshot Home Assistant state
 	scheduler.Register("*/15 * * * *", asynq.NewTask("ha:snapshot", nil))
 
+	// Daily 9am: check travel prices
+	scheduler.Register("0 9 * * *", asynq.NewTask("travel:check", nil))
+
 	// Start worker to process tasks
 	go runWorker(cfg, db, scraper, contentAgent, ha)
 
@@ -159,8 +163,8 @@ func runWorker(cfg *config.Config, db *store.Store, scraper *services.ScraperCli
 		}
 		until := time.Now()
 
-		// HA history API can be slow for all entities — give it 60s
-		histCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		// HA history API batches ~8 requests for 782 entities — give it 3 min
+		histCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 		defer cancel()
 
 		history, err := ha.GetHistoryRange(histCtx, since, until)
@@ -187,6 +191,136 @@ func runWorker(cfg *config.Config, db *store.Store, scraper *services.ScraperCli
 		}
 		log.Printf("HA history: %d new state changes from %d entities (%s → %s)",
 			inserted, len(history), since.Format("15:04:05"), until.Format("15:04:05"))
+		return nil
+	})
+
+	mux.HandleFunc("travel:check", func(ctx context.Context, t *asynq.Task) error {
+		log.Println("Scheduled: checking travel prices")
+
+		flightResult, err := scraper.ScrapeFlights(ctx)
+		if err != nil {
+			log.Printf("Travel check: flights scrape error: %v", err)
+		} else if flightResult.Error != "" {
+			log.Printf("Travel check: flights scraper error: %s", flightResult.Error)
+		} else if len(flightResult.Prices) > 0 {
+			minPrice := flightResult.Prices[0]
+			for _, p := range flightResult.Prices[1:] {
+				if p.Price < minPrice.Price {
+					minPrice = p
+				}
+			}
+			if err := db.AddTravelPrice(ctx, models.TravelPrice{
+				WatchID:  "watch-den-cdg-sep26",
+				Price:    minPrice.Price,
+				Currency: "USD",
+				Details:  minPrice.Details,
+			}); err != nil {
+				log.Printf("Travel check: store flight price: %v", err)
+			} else {
+				log.Printf("Travel check: flights min=$%.0f", minPrice.Price)
+			}
+		}
+
+		ticketResult, err := scraper.ScrapeTickets(ctx)
+		if err != nil {
+			log.Printf("Travel check: tickets scrape error: %v", err)
+		} else if ticketResult.Error != "" {
+			log.Printf("Travel check: tickets scraper error: %s", ticketResult.Error)
+		} else if len(ticketResult.Prices) > 0 {
+			minPrice := ticketResult.Prices[0]
+			for _, p := range ticketResult.Prices[1:] {
+				if p.Price < minPrice.Price {
+					minPrice = p
+				}
+			}
+			if err := db.AddTravelPrice(ctx, models.TravelPrice{
+				WatchID:  "watch-celine-paris-sep26",
+				Price:    minPrice.Price,
+				Currency: "USD",
+				Details:  minPrice.Details,
+			}); err != nil {
+				log.Printf("Travel check: store ticket price: %v", err)
+			} else {
+				log.Printf("Travel check: tickets min=$%.0f", minPrice.Price)
+			}
+		} else {
+			log.Println("Travel check: no ticket listings found yet")
+		}
+
+		baltResult, err := scraper.ScrapeBaltimoreFligths(ctx)
+		if err != nil {
+			log.Printf("Travel check: baltimore flights error: %v", err)
+		} else if baltResult.Error != "" {
+			log.Printf("Travel check: baltimore flights scraper error: %s", baltResult.Error)
+		} else if len(baltResult.Prices) > 0 {
+			minPrice := baltResult.Prices[0]
+			for _, p := range baltResult.Prices[1:] {
+				if p.Price < minPrice.Price {
+					minPrice = p
+				}
+			}
+			if err := db.AddTravelPrice(ctx, models.TravelPrice{
+				WatchID:  "watch-den-bwi-aug26",
+				Price:    minPrice.Price,
+				Currency: "USD",
+				Details:  minPrice.Details,
+			}); err != nil {
+				log.Printf("Travel check: store baltimore price: %v", err)
+			} else {
+				log.Printf("Travel check: baltimore min=$%.0f", minPrice.Price)
+			}
+		} else {
+			log.Println("Travel check: no baltimore flights found")
+		}
+
+		lvResult, err := scraper.ScrapeLasVegasFlights(ctx)
+		if err != nil {
+			log.Printf("Travel check: las vegas flights error: %v", err)
+		} else if lvResult.Error != "" {
+			log.Printf("Travel check: las vegas flights scraper error: %s", lvResult.Error)
+		} else if len(lvResult.Prices) > 0 {
+			minPrice := lvResult.Prices[0]
+			for _, p := range lvResult.Prices[1:] {
+				if p.Price < minPrice.Price {
+					minPrice = p
+				}
+			}
+			if err := db.AddTravelPrice(ctx, models.TravelPrice{
+				WatchID:  "watch-den-las-nov26",
+				Price:    minPrice.Price,
+				Currency: "USD",
+				Details:  minPrice.Details,
+			}); err != nil {
+				log.Printf("Travel check: store las vegas price: %v", err)
+			} else {
+				log.Printf("Travel check: las vegas min=$%.0f", minPrice.Price)
+			}
+		}
+
+		lisaResult, err := scraper.ScrapeLisaTickets(ctx)
+		if err != nil {
+			log.Printf("Travel check: lisa tickets error: %v", err)
+		} else if lisaResult.Error != "" {
+			log.Printf("Travel check: lisa tickets scraper error: %s", lisaResult.Error)
+		} else if len(lisaResult.Prices) > 0 {
+			minPrice := lisaResult.Prices[0]
+			for _, p := range lisaResult.Prices[1:] {
+				if p.Price < minPrice.Price {
+					minPrice = p
+				}
+			}
+			if err := db.AddTravelPrice(ctx, models.TravelPrice{
+				WatchID:  "watch-lisa-vegas-nov26",
+				Price:    minPrice.Price,
+				Currency: "USD",
+				Details:  minPrice.Details,
+			}); err != nil {
+				log.Printf("Travel check: store lisa price: %v", err)
+			} else {
+				log.Printf("Travel check: lisa min=$%.0f", minPrice.Price)
+			}
+		}
+
 		return nil
 	})
 
