@@ -34,8 +34,14 @@ export default function InsightsPage() {
 
   async function generate() {
     setGenerating(true)
+    setError('')
     try {
-      await fetch('/api/v1/home/insights/generate', { method: 'POST', credentials: 'include' })
+      const r = await fetch('/api/v1/home/insights/generate', { method: 'POST', credentials: 'include' })
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}))
+        setError(body.error ?? `Failed (${r.status})`)
+        return
+      }
       load()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed')

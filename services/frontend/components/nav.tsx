@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { clsx } from 'clsx'
-import { Home, Dumbbell, Instagram, Bot, MessageSquare, LogIn, LogOut, MapPin, Layers, DollarSign, Lightbulb, Plane, CreditCard, Sparkles } from 'lucide-react'
+import { Home, Dumbbell, Instagram, Bot, MessageSquare, LogIn, LogOut, MapPin, Layers, DollarSign, Lightbulb, Plane, CreditCard, Sparkles, Zap } from 'lucide-react'
 
 const publicLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: Home },
@@ -20,6 +20,7 @@ const publicLinks = [
 const privateLinks = [
   { href: '/finance', label: 'Finance', icon: DollarSign },
   { href: '/travel', label: 'Travel', icon: Plane },
+  { href: '/energy', label: 'Energy', icon: Zap },
   { href: '/spending', label: 'Spending', icon: CreditCard },
   { href: '/insights', label: 'Insights', icon: Sparkles },
 ]
@@ -53,7 +54,7 @@ export function Nav() {
       {/* Desktop top nav */}
       <nav className="hidden sm:block border-b border-neutral-800 bg-neutral-950">
         <div className="mx-auto max-w-7xl px-4">
-          <div className="flex h-14 items-center gap-1">
+          <div className="flex h-14 items-center gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             <Link href="/dashboard" className="mr-6 text-sm font-semibold text-white">
               enavu-hub
             </Link>

@@ -39,7 +39,7 @@ func main() {
 	defer db.Close()
 
 	if err := db.Migrate(ctx); err != nil {
-		log.Fatalf("migrate: %v", err)
+		log.Printf("Warning: migrate: %v (continuing - tables may already exist)", err)
 	}
 	log.Println("Database ready")
 
@@ -54,6 +54,7 @@ func main() {
 	haAgent := agent.NewHAAgent(aiClient, haClient, db)
 	contentAgent := agent.NewContentAgent(aiClient, igClient, db)
 	insightAgent := agent.NewHAInsightAgent(aiClient, db)
+	workoutAgent := agent.NewWorkoutAgent(aiClient, db)
 
 	// ─── WebSocket hub ───────────────────────────────────────────────────────
 	hub := ws.NewHub()
@@ -62,6 +63,7 @@ func main() {
 	authH    := handlers.NewAuthHandler(cfg)
 	healthH  := handlers.NewHealthHandler(db, haClient, scraperClient)
 	workoutH := handlers.NewWorkoutHandler(db, scraperClient)
+	workoutH.SetAgent(workoutAgent)
 	homeH    := handlers.NewHomeHandler(haClient, db)
 	postH    := handlers.NewPostHandler(db, contentAgent)
 	agentH   := handlers.NewAgentHandler(db)

@@ -1,0 +1,22 @@
+services:
+  tfc:
+    build: .
+    container_name: tfc
+    ports:
+      - "3002:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=${DATABASE_URL}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - PLAID_CLIENT_ID=${PLAID_CLIENT_ID}
+      - PLAID_SECRET=${PLAID_SECRET}
+      - PLAID_ENV=${PLAID_ENV:-sandbox}
+    restart: unless-stopped
+    networks:
+      - enavu-net
+
+networks:
+  enavu-net:
+    external: true
+    name: enavu-hub_enavu-net

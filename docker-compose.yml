@@ -8,6 +8,7 @@ services:
     environment:
       - ENV=development
       - PORT=8080
+      - TZ=America/Denver
       - DATABASE_URL=postgres://enavu:enavu@postgres:5432/enavu_hub?sslmode=disable
       - REDIS_URL=redis://redis:6379
       - HA_URL=${HA_URL:-https://hotel89408.com}
@@ -56,10 +57,29 @@ services:
       - "3000:3000"
     environment:
       - API_URL=http://api:8080
-      - NEXT_PUBLIC_API_URL=http://localhost:8080
-      - NEXT_PUBLIC_WS_URL=ws://localhost:8080
+      - NEXT_PUBLIC_API_URL=https://enavu.io
+      - NEXT_PUBLIC_WS_URL=wss://enavu.io
     depends_on:
       - api
+    restart: unless-stopped
+    networks:
+      - enavu-net
+
+  tfc:
+    build:
+      context: ./services/tfc
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=postgres://enavu:enavu@postgres:5432/enavu_hub?sslmode=disable
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - PLAID_CLIENT_ID=${PLAID_CLIENT_ID}
+      - PLAID_SECRET=${PLAID_SECRET}
+      - PLAID_ENV=${PLAID_ENV:-sandbox}
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - enavu-net

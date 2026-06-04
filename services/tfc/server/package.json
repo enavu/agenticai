@@ -1,0 +1,19 @@
+{
+  "name": "trip-fund-coach-server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch index.js",
+    "start": "node index.js",
+    "migrate": "node db/migrate.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "pg": "^8.11.5",
+    "plaid": "^26.0.0"
+  }
+}

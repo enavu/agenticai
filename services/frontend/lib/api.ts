@@ -42,6 +42,30 @@ export interface WorkoutStats {
   workouts_this_month: number
 }
 
+
+export interface WorkoutPatterns {
+  days_missed_this_month: number
+  workouts_this_month: number
+  current_streak: number
+  days_since_last_workout: number
+  instructor_variety_30d: number
+  class_variety_30d: number
+  top_instructor: string
+  top_class: string
+  avg_days_between_workouts: number
+}
+
+export interface WorkoutInsight {
+  id: string
+  summary: string
+  patterns: WorkoutPatterns
+  created_at: string
+}
+
+export interface TravelSummary {
+  total_watches: number
+  watches: { label: string; type: string; price_stable: boolean }[]
+}
 export interface Post {
   id: string
   caption: string
@@ -186,6 +210,7 @@ export const api = {
     sync: () => apiFetch<{ synced: number; skipped: number; total: number }>(
       '/api/v1/workouts/sync', { method: 'POST' }
     ),
+    insights: () => apiFetch<WorkoutInsight>('/api/v1/workouts/insights'),
   },
 
   home: {

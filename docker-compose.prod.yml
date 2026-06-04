@@ -13,6 +13,7 @@ services:
     depends_on:
       - frontend
       - api
+      - tfc
     restart: unless-stopped
     networks:
       - enavu-net
@@ -22,19 +23,22 @@ services:
       args:
         - NEXT_PUBLIC_API_URL=https://enavu.io
         - NEXT_PUBLIC_WS_URL=wss://enavu.io
-    ports: []  # Caddy handles external traffic, no direct port exposure
+    ports: []
     environment:
       - API_URL=http://api:8080
       - NEXT_PUBLIC_API_URL=https://enavu.io
       - NEXT_PUBLIC_WS_URL=wss://enavu.io
 
   api:
-    ports: []  # Not exposed directly in prod
+    ports: []
     environment:
       - ENV=production
       - SITE_URL=https://enavu.io
     volumes:
       - uploads_data:/data/uploads
+
+  tfc:
+    ports: []
 
 volumes:
   caddy_data:

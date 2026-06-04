@@ -209,6 +209,15 @@ CREATE TABLE IF NOT EXISTS ha_insights (
 );
 
 CREATE INDEX IF NOT EXISTS ha_insights_date_idx ON ha_insights(date DESC);
+
+CREATE TABLE IF NOT EXISTS workout_insights (
+    id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    summary     TEXT NOT NULL,
+    patterns    JSONB NOT NULL DEFAULT '{}',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS workout_insights_created_idx ON workout_insights(created_at DESC);
 `
 
 // ─── Workouts ─────────────────────────────────────────────────────────────────
@@ -847,4 +856,128 @@ func (s *Store) GetPlaidTransactions(ctx context.Context, days int) ([]models.Pl
 		txns = append(txns, t)
 	}
 	return txns, nil
+}
+
+// ─── Workout Patterns + Insights ─────────────────────────────────────────────
+
+func (s *Store) GetWorkoutPatterns(ctx context.Context) (*models.WorkoutPatterns, error) {
+	p := &models.WorkoutPatterns{}
+
+	err := s.pool.QueryRow(ctx, `
+		WITH month_days AS (
+			SELECT generate_series(
+				date_trunc('month', NOW()),
+				LEAST(NOW()::date, (date_trunc('month', NOW()) + INTERVAL '1 month' - INTERVAL '1 day')::date),
+				'1 day'::interval
+			)::date AS d
+		),
+		workout_days AS (
+			SELECT DISTINCT DATE(class_date) AS wd
+			FROM workouts
+			WHERE class_date >= date_trunc('month', NOW())
+		)
+		SELECT
+			(SELECT COUNT(*) FROM month_days) - (SELECT COUNT(*) FROM workout_days),
+			(SELECT COUNT(*) FROM workout_days)
+	`).Scan(&p.DaysMissedThisMonth, &p.WorkoutsThisMonth)
+	if err != nil {
+		return nil, err
+	}
+
+	var daysSince float64
+	s.pool.QueryRow(ctx, `
+		SELECT COALESCE(EXTRACT(EPOCH FROM (NOW() - MAX(class_date))) / 86400, 999)
+		FROM workouts`).Scan(&daysSince)
+	p.DaysSinceLastWorkout = int(daysSince)
+
+	s.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(DISTINCT instructor) FILTER (WHERE instructor != ''),
+			COUNT(DISTINCT class_name),
+			COALESCE(MODE() WITHIN GROUP (ORDER BY instructor) FILTER (WHERE instructor != ''), ''),
+			COALESCE(MODE() WITHIN GROUP (ORDER BY class_name), '')
+		FROM workouts
+		WHERE class_date >= NOW() - INTERVAL '30 days'
+	`).Scan(&p.InstructorVariety, &p.ClassVariety, &p.TopInstructor, &p.TopClass)
+
+	s.pool.QueryRow(ctx, `
+		WITH sorted AS (
+			SELECT class_date, LAG(class_date) OVER (ORDER BY class_date) AS prev
+			FROM workouts
+			WHERE class_date >= NOW() - INTERVAL '90 days'
+		)
+		SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (class_date - prev)) / 86400), 0)
+		FROM sorted WHERE prev IS NOT NULL
+	`).Scan(&p.AvgDaysBetween)
+
+	{
+		wrows, werr := s.pool.Query(ctx, `
+			SELECT DISTINCT DATE(class_date) AS wd
+			FROM workouts
+			WHERE class_date >= NOW() - INTERVAL '60 days'
+			ORDER BY wd DESC`)
+		if werr == nil {
+			defer wrows.Close()
+			streak := 0
+			var prev time.Time
+			for wrows.Next() {
+				var d time.Time
+				if wrows.Scan(&d) != nil {
+					break
+				}
+				if prev.IsZero() {
+					prev = d
+					streak = 1
+					continue
+				}
+				diff := prev.Sub(d).Hours() / 24
+				if diff <= 1.5 {
+					streak++
+					prev = d
+				} else {
+					break
+				}
+			}
+			p.CurrentStreak = streak
+		}
+	}
+
+	return p, nil
+}
+
+func (s *Store) UpsertWorkoutInsight(ctx context.Context, summary string, patterns *models.WorkoutPatterns) (*models.WorkoutInsight, error) {
+	pJSON, err := json.Marshal(patterns)
+	if err != nil {
+		return nil, err
+	}
+	id := uuid.NewString()
+	now := time.Now()
+	_, err = s.pool.Exec(ctx, `
+		INSERT INTO workout_insights (id, summary, patterns, created_at)
+		VALUES ($1, $2, $3, $4)`,
+		id, summary, pJSON, now)
+	if err != nil {
+		return nil, err
+	}
+	return &models.WorkoutInsight{
+		ID:        id,
+		Summary:   summary,
+		Patterns:  *patterns,
+		CreatedAt: now,
+	}, nil
+}
+
+func (s *Store) GetLatestWorkoutInsight(ctx context.Context) (*models.WorkoutInsight, error) {
+	var wi models.WorkoutInsight
+	var pJSON []byte
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, summary, patterns, created_at
+		FROM workout_insights
+		ORDER BY created_at DESC
+		LIMIT 1`).Scan(&wi.ID, &wi.Summary, &pJSON, &wi.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	json.Unmarshal(pJSON, &wi.Patterns)
+	return &wi, nil
 }

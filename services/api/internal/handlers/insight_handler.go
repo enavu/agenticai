@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 	"time"
 
@@ -39,6 +40,7 @@ func (h *InsightHandler) Generate(c *gin.Context) {
 	yesterday := time.Now().AddDate(0, 0, -1)
 
 	if err := h.agent.Run(c.Request.Context(), yesterday); err != nil {
+		log.Printf("insight generate error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

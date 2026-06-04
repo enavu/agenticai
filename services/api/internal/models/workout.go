@@ -25,3 +25,22 @@ type WorkoutStats struct {
 	LastWorkout    time.Time `json:"last_workout"`
 	WorkoutsThisMonth int   `json:"workouts_this_month"`
 }
+
+type WorkoutPatterns struct {
+	DaysMissedThisMonth int     `json:"days_missed_this_month"`
+	WorkoutsThisMonth   int     `json:"workouts_this_month"`
+	CurrentStreak       int     `json:"current_streak"`
+	DaysSinceLastWorkout int    `json:"days_since_last_workout"`
+	InstructorVariety   int     `json:"instructor_variety_30d"`
+	ClassVariety        int     `json:"class_variety_30d"`
+	TopInstructor       string  `json:"top_instructor"`
+	TopClass            string  `json:"top_class"`
+	AvgDaysBetween      float64 `json:"avg_days_between_workouts"`
+}
+
+type WorkoutInsight struct {
+	ID        string    `json:"id"`
+	Summary   string    `json:"summary"`
+	Patterns  WorkoutPatterns `json:"patterns"`
+	CreatedAt time.Time `json:"created_at"`
+}

@@ -8,6 +8,7 @@ type AgentRunStatus string
 const (
 	AgentTypeHA      AgentType = "ha"
 	AgentTypeContent AgentType = "content"
+	AgentTypeWorkout AgentType = "workout"
 
 	AgentRunStatusRunning   AgentRunStatus = "running"
 	AgentRunStatusCompleted AgentRunStatus = "completed"
