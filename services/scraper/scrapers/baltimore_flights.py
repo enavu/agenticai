@@ -49,10 +49,12 @@ async def scrape_baltimore_flights() -> list[dict]:
                 if not re.search(r'\bnonstop\b', ctx, re.IGNORECASE):
                     continue
 
-                results.append({
-                    "price": float(price),
-                    "details": {"route": "DEN→BWI", "dates": "Aug 8–12 2026", "type": trip_type, "stops": "nonstop"},
-                })
+                airline_m = re.search(r'(United|Southwest|Delta|American|Spirit|Frontier|Alaska|JetBlue|Allegiant|Sun Country)', ctx, re.IGNORECASE)
+                airline = airline_m.group(1) if airline_m else None
+                det = {"route": "DEN→BWI", "dates": "Aug 8–12 2026", "type": trip_type, "stops": "nonstop"}
+                if airline:
+                    det["airline"] = airline
+                results.append({"price": float(price), "details": det})
 
             seen = set()
             unique = []

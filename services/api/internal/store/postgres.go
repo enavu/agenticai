@@ -272,11 +272,12 @@ func (s *Store) GetWorkoutStats(ctx context.Context) (*models.WorkoutStats, erro
 		    COALESCE(SUM(cals_burned), 0)::int,
 		    COALESCE(SUM(duration_minutes), 0)::int,
 		    COALESCE(AVG(cals_burned), 0)::float,
+		    COALESCE(MIN(class_date), NOW()),
 		    COALESCE(MAX(class_date), NOW()),
 		    COUNT(*) FILTER (WHERE class_date >= date_trunc('month', NOW()))::int
 		FROM workouts`).Scan(&stats.TotalWorkouts, &stats.TotalCalories,
-		&stats.TotalMinutes, &stats.AvgCalories, &stats.LastWorkout,
-		&stats.WorkoutsThisMonth)
+		&stats.TotalMinutes, &stats.AvgCalories, &stats.FirstWorkout,
+		&stats.LastWorkout, &stats.WorkoutsThisMonth)
 	return &stats, err
 }
 

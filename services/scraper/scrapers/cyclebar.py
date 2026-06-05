@@ -82,7 +82,7 @@ async def _do_scrape(page: Page, username: str, password: str) -> list[dict]:
     return workouts
 
 
-async def _scroll_to_bottom(page: Page, max_rounds: int = 120) -> None:
+async def _scroll_to_bottom(page: Page, max_rounds: int = 300) -> None:
     """
     Scroll by bringing the last table row into view, then waiting for
     React to lazy-load more rows. Stops when row count stops growing.
@@ -107,7 +107,7 @@ async def _scroll_to_bottom(page: Page, max_rounds: int = 120) -> None:
 
         if row_count == prev_count:
             stale_rounds += 1
-            if stale_rounds >= 3:
+            if stale_rounds >= 6:
                 break  # No new rows after 3 consecutive rounds — we're done
         else:
             stale_rounds = 0

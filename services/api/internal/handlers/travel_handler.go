@@ -53,12 +53,12 @@ func (h *TravelHandler) List(c *gin.Context) {
 			history = []models.TravelPrice{}
 		}
 
-		// latest_prices: all entries from today (or most recent check date)
+		// latest_prices: all entries from the most recent check run (within 10 min of newest)
 		latestPrices := []models.TravelPrice{}
 		if len(history) > 0 {
-			latest := history[0].CheckedAt.Truncate(24 * time.Hour)
+			cutoff := history[0].CheckedAt.Add(-10 * time.Minute)
 			for _, p := range history {
-				if p.CheckedAt.Truncate(24*time.Hour).Equal(latest) {
+				if p.CheckedAt.After(cutoff) {
 					latestPrices = append(latestPrices, p)
 				} else {
 					break

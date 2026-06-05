@@ -22,8 +22,9 @@ type WorkoutStats struct {
 	TotalCalories  int       `json:"total_calories"`
 	TotalMinutes   int       `json:"total_minutes"`
 	AvgCalories    float64   `json:"avg_calories"`
-	LastWorkout    time.Time `json:"last_workout"`
-	WorkoutsThisMonth int   `json:"workouts_this_month"`
+	FirstWorkout      time.Time `json:"first_workout"`
+	LastWorkout       time.Time `json:"last_workout"`
+	WorkoutsThisMonth int       `json:"workouts_this_month"`
 }
 
 type WorkoutPatterns struct {

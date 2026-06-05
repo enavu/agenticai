@@ -154,7 +154,12 @@ function WatchCard({ watch, onPriceLogged }: { watch: TravelWatch; onPriceLogged
           <p className="text-xs text-neutral-500 uppercase tracking-wide mb-2">Today's nonstop options</p>
           {latest.map((p, i) => (
             <div key={p.id ?? i} className="flex items-center justify-between bg-neutral-800/50 rounded-lg px-3 py-2">
-              <span className={`text-lg font-bold ${meta.color}`}>{fmtPrice(p.price)}</span>
+              <div>
+                <span className={`text-lg font-bold ${meta.color}`}>{fmtPrice(p.price)}</span>
+                {typeof p.details?.airline === 'string' && p.details.airline && (
+                  <span className="text-xs text-neutral-500 ml-2">{p.details.airline}</span>
+                )}
+              </div>
               {typeof p.details?.notes === 'string' && p.details.notes && (
                 <span className="text-xs text-neutral-500">{p.details.notes}</span>
               )}
@@ -180,7 +185,7 @@ function WatchCard({ watch, onPriceLogged }: { watch: TravelWatch; onPriceLogged
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="bg-neutral-800/40 rounded-lg py-2">
               <p className="text-xs text-neutral-500">Avg</p>
-              <p className={`text-sm font-semibold ${meta.color}`}>{fmtPrice(analytics.avg)}</p>
+              <p className="text-sm font-semibold text-neutral-300">{fmtPrice(analytics.avg)}</p>
             </div>
             <div className="bg-neutral-800/40 rounded-lg py-2">
               <p className="text-xs text-neutral-500">Low</p>
