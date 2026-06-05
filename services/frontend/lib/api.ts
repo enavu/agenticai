@@ -193,6 +193,7 @@ export interface TravelWatch {
   label: string
   type: 'flight' | 'ticket'
   latest_price: number | null
+  latest_prices: TravelPrice[]
   history: TravelPrice[]
 }
 

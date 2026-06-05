@@ -1,4 +1,4 @@
-"""DEN→LAS flight price scraper using Google Flights."""
+"""DEN→LAS flight price scraper using Google Flights — nonstop only."""
 
 import asyncio
 import re
@@ -9,15 +9,11 @@ logger = logging.getLogger(__name__)
 
 GOOGLE_FLIGHTS_URL = (
     "https://www.google.com/travel/flights"
-    "?q=flights+from+denver+to+las+vegas+november+13+2026"
+    "?q=nonstop+flights+from+denver+to+las+vegas+november+13+2026"
 )
 
 
 async def scrape_lasvegas_flights() -> list[dict]:
-    """
-    Scrape Google Flights for DEN→LAS flights around Nov 13–14, 2026.
-    Returns a list of price dicts.
-    """
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=True,
@@ -43,8 +39,20 @@ async def scrape_lasvegas_flights() -> list[dict]:
             for m in re.finditer(r'\$([0-9,]+)\s*\n?\s*(round trip|one way)', text, re.IGNORECASE):
                 price = int(m.group(1).replace(',', ''))
                 trip_type = m.group(2).strip().lower()
-                if 30 <= price <= 1500:
-                    results.append({"price": float(price), "details": {"route": "DEN→LAS", "dates": "Nov 13–14 2026", "type": trip_type}})
+                if not (30 <= price <= 1500):
+                    continue
+
+                start = max(0, m.start() - 300)
+                end = min(len(text), m.end() + 300)
+                ctx = text[start:end]
+
+                if not re.search(r'\bnonstop\b', ctx, re.IGNORECASE):
+                    continue
+
+                results.append({
+                    "price": float(price),
+                    "details": {"route": "DEN→LAS", "dates": "Nov 13–14 2026", "type": trip_type, "stops": "nonstop"},
+                })
 
             seen = set()
             unique = []
@@ -53,7 +61,7 @@ async def scrape_lasvegas_flights() -> list[dict]:
                     seen.add(r["price"])
                     unique.append(r)
 
-            logger.info(f"Google Flights (Las Vegas): {len(unique)} unique prices found")
+            logger.info(f"Google Flights (Las Vegas nonstop): {len(unique)} prices found")
             return unique
 
         except Exception as e:

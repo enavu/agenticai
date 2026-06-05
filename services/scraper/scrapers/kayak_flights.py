@@ -1,4 +1,4 @@
-"""Flight price scraper using Google Flights."""
+"""Flight price scraper using Google Flights — nonstop only."""
 
 import asyncio
 import re
@@ -7,16 +7,15 @@ from playwright.async_api import async_playwright
 
 logger = logging.getLogger(__name__)
 
-# Google Flights — DEN→CDG flexible September 2026
 GOOGLE_FLIGHTS_URL = (
     "https://www.google.com/travel/flights"
-    "?q=flights+from+denver+to+paris+september+2026"
+    "?q=nonstop+flights+from+denver+to+paris+september+2026"
 )
 
 
 async def scrape_flights() -> list[dict]:
     """
-    Scrape Google Flights for DEN→CDG prices in September 2026.
+    Scrape Google Flights for nonstop DEN→CDG prices in September 2026.
     Returns a list of price dicts: [{"price": 927, "details": {...}}]
     """
     async with async_playwright() as p:
@@ -36,21 +35,29 @@ async def scrape_flights() -> list[dict]:
         try:
             logger.info(f"Navigating to Google Flights: {GOOGLE_FLIGHTS_URL}")
             await page.goto(GOOGLE_FLIGHTS_URL, wait_until="domcontentloaded", timeout=30_000)
-
-            # Wait for flight results to render
             await asyncio.sleep(8)
 
             text = await page.evaluate("() => document.body.innerText")
 
-            # Extract prices paired with trip type — Google renders "$927\nround trip" or "$927\none way"
             results = []
             for m in re.finditer(r'\$([0-9,]+)\s*\n?\s*(round trip|one way)', text, re.IGNORECASE):
                 price = int(m.group(1).replace(',', ''))
                 trip_type = m.group(2).strip().lower()
-                if 300 <= price <= 5000:
-                    results.append({"price": float(price), "details": {"route": "DEN→CDG", "month": "Sep 2026", "type": trip_type}})
+                if not (300 <= price <= 5000):
+                    continue
 
-            # Deduplicate by price
+                start = max(0, m.start() - 300)
+                end = min(len(text), m.end() + 300)
+                ctx = text[start:end]
+
+                if not re.search(r'\bnonstop\b', ctx, re.IGNORECASE):
+                    continue  # skip connecting flights
+
+                results.append({
+                    "price": float(price),
+                    "details": {"route": "DEN→CDG", "month": "Sep 2026", "type": trip_type, "stops": "nonstop"},
+                })
+
             seen = set()
             unique = []
             for r in results:
@@ -58,7 +65,7 @@ async def scrape_flights() -> list[dict]:
                     seen.add(r["price"])
                     unique.append(r)
 
-            logger.info(f"Google Flights: {len(unique)} unique prices found")
+            logger.info(f"Google Flights (nonstop): {len(unique)} unique prices found")
             for r in unique[:5]:
                 logger.info(f"  ${r['price']:.0f} ({r['details']['type']})")
 
