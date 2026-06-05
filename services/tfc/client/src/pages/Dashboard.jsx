@@ -69,7 +69,10 @@ export default function Dashboard() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {trips.map(trip => (
             <div key={trip.id} className="space-y-2">
-              <TripCard trip={trip} />
+              <TripCard
+                trip={trip}
+                onFlightUpdate={updated => setTrips(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t))}
+              />
               <button
                 onClick={() => setSavingModal(trip.id)}
                 className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-gray-500 hover:text-gray-300 border border-dashed border-gray-800 hover:border-gray-600 rounded-lg transition-colors"

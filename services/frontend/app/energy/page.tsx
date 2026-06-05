@@ -52,6 +52,38 @@ function barColor(w: number, max: number) {
   return '#34d399'
 }
 
+function getFunInsight(channels: EnergyChannel[], summary: EnergySummary): string {
+  const ch = (id: number) => channels.find(c => c.id === id)
+  const furnace1 = ch(2)
+  const furnace2 = ch(8)
+  const dishwasher = ch(15)
+  const nonMainsW = channels.filter(c => !c.is_mains).reduce((s, c) => s + c.power_w, 0)
+  const hvacW = (furnace1?.power_w ?? 0) + (furnace2?.power_w ?? 0)
+  const lightingIds = [6, 11, 13, 14, 16]
+  const lightingW = lightingIds.reduce((s, id) => s + (ch(id)?.power_w ?? 0), 0)
+
+  if (furnace1 && furnace2 && furnace1.power_w > 500 && furnace2.power_w > 500)
+    return `Both furnaces are running simultaneously — a ${Math.round(hvacW)}W double-team. Your heating bill is having a main character moment. ⚔️`
+
+  if (nonMainsW > 0 && hvacW / nonMainsW > 0.5)
+    return `HVAC is eating ${Math.round((hvacW / nonMainsW) * 100)}% of your home's draw right now. Colorado winters are not playing around. 🥶`
+
+  if (dishwasher && dishwasher.power_w < 5 && summary.today_kwh > 1)
+    return `The dishwasher is clocked out (0W) while the rest of the house is pulling ${Math.round(summary.total_power_w)}W. Freeloading confirmed. 🍽️`
+
+  if (nonMainsW > 0 && lightingW / nonMainsW > 0.25)
+    return `${Math.round((lightingW / nonMainsW) * 100)}% of current draw is just lights. Someone's got a thing for ambiance. 💡`
+
+  const dailyCost = summary.daily_avg_kwh * 0.12
+  if (dailyCost > 4)
+    return `At $${dailyCost.toFixed(2)}/day you're on pace for a $${Math.round(dailyCost * 30)} month. Just vibes and kilowatts. 💸`
+
+  if (summary.total_power_w < 300)
+    return `${Math.round(summary.total_power_w)}W whole-home draw. Extremely chill. The house is basically meditating. 🧘`
+
+  return `Running ${Math.round(summary.total_power_w)}W across ${channels.filter(c => !c.is_mains && c.power_w > 5).length} active circuits. Normal chaos. ⚡`
+}
+
 export default function EnergyPage() {
   const [data, setData] = useState<EnergyData | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -98,6 +130,7 @@ export default function EnergyPage() {
   const hvac = channels.filter(c => c.id === 2 || c.id === 8)
   const onlineSince = summary.online_since ? new Date(summary.online_since) : null
   const partialMonth = summary.days_of_data < summary.day_of_month
+  const funInsight = getFunInsight(channels, summary)
 
   return (
     <div className="space-y-6">
@@ -126,6 +159,11 @@ export default function EnergyPage() {
           Month totals reflect {summary.days_of_data} of {summary.day_of_month} days — projections extrapolated from that window
         </div>
       )}
+
+      {/* Fun insight */}
+      <div className="rounded-lg border border-violet-800/40 bg-violet-950/20 px-4 py-3 text-sm text-violet-300 italic">
+        {funInsight}
+      </div>
 
       {/* KPI row */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">

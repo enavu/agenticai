@@ -27,4 +27,14 @@ router.patch('/:id/saved', async (req, res) => {
   res.json({ trip: result.rows[0] })
 })
 
+router.patch('/:id/flight', async (req, res) => {
+  const { id } = req.params
+  const { flight_price_usd, flight_notes } = req.body
+  const result = await query(
+    'UPDATE trips SET flight_price_usd = $1, flight_notes = $2 WHERE id = $3 RETURNING *',
+    [flight_price_usd ?? null, flight_notes ?? null, id]
+  )
+  res.json({ trip: result.rows[0] })
+})
+
 export default router

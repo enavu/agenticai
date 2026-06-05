@@ -1,4 +1,5 @@
-import { Calendar, Target, TrendingUp } from 'lucide-react'
+import { useState } from 'react'
+import { Calendar, Target, TrendingUp, Plane, Pencil, Check, X } from 'lucide-react'
 
 function daysUntil(dateStr) {
   const diff = new Date(dateStr) - new Date()
@@ -9,7 +10,33 @@ function weeksUntil(days) {
   return Math.max(1, Math.ceil(days / 7))
 }
 
-export function TripCard({ trip }) {
+export function TripCard({ trip, onFlightUpdate }) {
+  const [editingFlight, setEditingFlight] = useState(false)
+  const [flightPrice, setFlightPrice] = useState(trip.flight_price_usd ?? '')
+  const [flightNotes, setFlightNotes] = useState(trip.flight_notes ?? '')
+  const [saving, setSaving] = useState(false)
+
+  async function saveFlight() {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/trips/${trip.id}/flight`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          flight_price_usd: flightPrice ? parseFloat(flightPrice) : null,
+          flight_notes: flightNotes || null,
+        }),
+      })
+      if (res.ok) {
+        const { trip: updated } = await res.json()
+        onFlightUpdate?.(updated)
+        setEditingFlight(false)
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const saved = parseFloat(trip.total_saved || trip.saved_usd || 0)
   const budget = parseFloat(trip.budget_usd)
   const remaining = Math.max(0, budget - saved)
@@ -84,6 +111,55 @@ export function TripCard({ trip }) {
           <p className="text-lg font-bold text-white">${weeklyNeeded}</p>
         </div>
       </div>
+
+      {/* Flight price */}
+      {editingFlight ? (
+        <div className="flex items-center gap-2 pt-1">
+          <Plane size={12} className="text-sky-400 shrink-0" />
+          <input
+            type="number"
+            min="0"
+            step="1"
+            placeholder="Price $"
+            value={flightPrice}
+            onChange={e => setFlightPrice(e.target.value)}
+            className="w-24 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+            autoFocus
+          />
+          <input
+            type="text"
+            placeholder="Notes (e.g. non-stop)"
+            value={flightNotes}
+            onChange={e => setFlightNotes(e.target.value)}
+            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+          />
+          <button onClick={saveFlight} disabled={saving} className="text-emerald-400 hover:text-emerald-300">
+            <Check size={13} />
+          </button>
+          <button onClick={() => { setEditingFlight(false); setFlightPrice(trip.flight_price_usd ?? ''); setFlightNotes(trip.flight_notes ?? '') }} className="text-gray-600 hover:text-gray-400">
+            <X size={13} />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between pt-1">
+          {trip.flight_price_usd ? (
+            <div className="flex items-center gap-1.5 text-xs text-sky-400">
+              <Plane size={11} />
+              <span className="font-medium">${parseFloat(trip.flight_price_usd).toFixed(0)}</span>
+              {trip.flight_notes && <span className="text-sky-400/60">· {trip.flight_notes}</span>}
+            </div>
+          ) : (
+            <span className="text-xs text-gray-700">No flight logged</span>
+          )}
+          <button
+            onClick={() => setEditingFlight(true)}
+            className="text-gray-700 hover:text-gray-400 transition-colors"
+            title="Log flight price"
+          >
+            <Pencil size={11} />
+          </button>
+        </div>
+      )}
     </div>
   )
 }

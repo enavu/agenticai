@@ -2,15 +2,21 @@ import { pool } from './client.js'
 
 const schema = `
 CREATE TABLE IF NOT EXISTS trips (
-  id          SERIAL PRIMARY KEY,
-  name        TEXT NOT NULL,
-  subtitle    TEXT,
-  date        DATE NOT NULL,
-  budget_usd  NUMERIC(10,2) NOT NULL,
-  saved_usd   NUMERIC(10,2) NOT NULL DEFAULT 0,
-  emoji       TEXT DEFAULT '✈️',
-  created_at  TIMESTAMPTZ DEFAULT NOW()
+  id               SERIAL PRIMARY KEY,
+  name             TEXT NOT NULL,
+  subtitle         TEXT,
+  date             DATE NOT NULL,
+  budget_usd       NUMERIC(10,2) NOT NULL,
+  saved_usd        NUMERIC(10,2) NOT NULL DEFAULT 0,
+  emoji            TEXT DEFAULT '✈️',
+  flight_price_usd NUMERIC(10,2),
+  flight_notes     TEXT,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Safe to re-run: add columns if upgrading an existing DB
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS flight_price_usd NUMERIC(10,2);
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS flight_notes TEXT;
 
 CREATE TABLE IF NOT EXISTS transactions (
   id          SERIAL PRIMARY KEY,
@@ -53,10 +59,10 @@ CREATE TABLE IF NOT EXISTS plaid_tokens (
 `
 
 const seedTrips = `
-INSERT INTO trips (name, subtitle, date, budget_usd, emoji) VALUES
-  ('Paris + Céline Dion',  'Sep 2026 · CDG',                    '2026-09-15', 4500, '🇫🇷'),
-  ('BTS — Baltimore',      'Aug 10, 2026 · Camden Yards',        '2026-08-10',  800, '💜'),
-  ('BTS — Arlington',      'Aug 15, 2026 · Globe Life Field',    '2026-08-15',  950, '💜')
+INSERT INTO trips (name, subtitle, date, budget_usd, emoji, flight_price_usd, flight_notes) VALUES
+  ('Paris + Céline Dion',  'Sep 2026 · CDG',                    '2026-09-15', 4500, '🇫🇷', NULL,  NULL),
+  ('BTS — Baltimore',      'Aug 10, 2026 · Camden Yards',        '2026-08-10',  800, '💜',  350,   'Non-stop'),
+  ('BTS — Arlington',      'Aug 15, 2026 · Globe Life Field',    '2026-08-15',  950, '💜',  NULL,  NULL)
 ON CONFLICT DO NOTHING;
 `
 
