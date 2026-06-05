@@ -209,3 +209,35 @@ func (h *TravelHandler) Check(c *gin.Context) {
 
 	c.JSON(http.StatusOK, results)
 }
+
+// POST /api/v1/travel/:watchId/price — manually log a price observation
+func (h *TravelHandler) LogPrice(c *gin.Context) {
+	watchID := c.Param("watchId")
+	var body struct {
+		Price  float64        `json:"price" binding:"required"`
+		Notes  string         `json:"notes"`
+		Stops  string         `json:"stops"` // e.g. "nonstop", "1 stop"
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	details := map[string]any{}
+	if body.Notes != "" {
+		details["notes"] = body.Notes
+	}
+	if body.Stops != "" {
+		details["stops"] = body.Stops
+	}
+	details["source"] = "manual"
+	if err := h.store.AddTravelPrice(c.Request.Context(), models.TravelPrice{
+		WatchID:  watchID,
+		Price:    body.Price,
+		Currency: "USD",
+		Details:  details,
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}

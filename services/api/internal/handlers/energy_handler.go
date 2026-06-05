@@ -125,20 +125,33 @@ func (h *HomeHandler) Energy(c *gin.Context) {
 		channels = append(channels, channelMap[i])
 	}
 
-	// Find online-since via CH1 power history (30 days back)
+	// Find online-since via CH1 power history — skip with ?history=false for fast loads
 	var onlineSince *time.Time
-	history, err := h.ha.GetHistory(c.Request.Context(),
-		"sensor.refoss_smart_energy_monitor_em_channel_1_power", 720)
-	if err == nil && len(history) > 0 && len(history[0]) > 0 {
-		t := history[0][0].LastChanged
-		onlineSince = &t
+	if c.Query("history") != "false" {
+		history, err := h.ha.GetHistory(c.Request.Context(),
+			"sensor.refoss_smart_energy_monitor_em_channel_1_power", 720)
+		if err == nil && len(history) > 0 && len(history[0]) > 0 {
+			t := history[0][0].LastChanged
+			onlineSince = &t
+		}
+	}
+
+	// Use branch circuit sum (non-mains) for totals to avoid split-phase double-counting.
+	// CH1 (Main Line A) + CH7 (Main Line B) would double-count 240V loads; summing
+	// individual branch circuits is always accurate regardless of mains CT configuration.
+	var totalPowerW, todayKwh, weekKwh, monthKwh float64
+	for i := 1; i <= 18; i++ {
+		if channelMap[i].IsMains {
+			continue
+		}
+		totalPowerW += channelMap[i].PowerW
+		todayKwh += channelMap[i].TodayKwh
+		weekKwh += channelMap[i].WeekKwh
+		monthKwh += channelMap[i].MonthKwh
 	}
 
 	now := time.Now()
 	dayOfMonth := now.Day()
-	monthKwh := channelMap[1].MonthKwh + channelMap[7].MonthKwh
-	todayKwh := channelMap[1].TodayKwh + channelMap[7].TodayKwh
-	weekKwh := channelMap[1].WeekKwh + channelMap[7].WeekKwh
 
 	daysOfData := dayOfMonth
 	if onlineSince != nil {
@@ -155,7 +168,7 @@ func (h *HomeHandler) Energy(c *gin.Context) {
 	projected := dailyAvg * 30
 
 	summary := EnergySummary{
-		TotalPowerW:       channelMap[1].PowerW + channelMap[7].PowerW,
+		TotalPowerW:       totalPowerW,
 		TodayKwh:          todayKwh,
 		WeekKwh:           weekKwh,
 		MonthKwh:          monthKwh,

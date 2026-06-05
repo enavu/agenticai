@@ -71,6 +71,7 @@ func setupRoutes(
 
 		priv.GET("/travel", travel.List)
 		priv.POST("/travel/check", travel.Check)
+		priv.POST("/travel/:watchId/price", travel.LogPrice)
 
 		priv.GET("/home/insights", insightH.List)
 		priv.POST("/home/insights/generate", insightH.Generate)

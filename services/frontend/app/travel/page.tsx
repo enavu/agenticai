@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { api, TravelData, TravelWatch } from '@/lib/api'
-import { Plane, Ticket, TrendingDown, ExternalLink, RefreshCw } from 'lucide-react'
+import { Plane, Ticket, TrendingDown, ExternalLink, RefreshCw, PlusCircle, Check, X } from 'lucide-react'
 
 function fmtPrice(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
@@ -45,12 +45,53 @@ const WATCH_META: Record<string, { icon: React.ReactNode; color: string; link: s
   },
 }
 
-function WatchCard({ watch }: { watch: TravelWatch }) {
+function stopsBadge(stops: string) {
+  if (!stops || stops === 'unknown') return null
+  const color = stops === 'nonstop'
+    ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/50'
+    : 'text-amber-400 bg-amber-950/40 border-amber-800/50'
+  return (
+    <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${color}`}>
+      {stops}
+    </span>
+  )
+}
+
+function WatchCard({ watch, onPriceLogged }: { watch: TravelWatch; onPriceLogged: () => void }) {
+  const [logging, setLogging] = useState(false)
+  const [form, setForm] = useState({ price: '', stops: 'nonstop', notes: '' })
+  const [saving, setSaving] = useState(false)
+
   const meta = WATCH_META[watch.id] ?? {
     icon: <Ticket size={18} className="text-neutral-400" />,
     color: 'text-neutral-400',
     link: '#',
     linkLabel: 'Search',
+  }
+
+  async function submitPrice(e: React.FormEvent) {
+    e.preventDefault()
+    if (!form.price) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/v1/travel/${watch.id}/price`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          price: parseFloat(form.price),
+          stops: form.stops || undefined,
+          notes: form.notes || undefined,
+        }),
+      })
+      if (res.ok) {
+        setLogging(false)
+        setForm({ price: '', stops: 'nonstop', notes: '' })
+        onPriceLogged()
+      }
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -90,6 +131,53 @@ function WatchCard({ watch }: { watch: TravelWatch }) {
         </div>
       )}
 
+      {/* Manual log form */}
+      {logging ? (
+        <form onSubmit={submitPrice} className="flex items-center gap-2 pt-1">
+          <input
+            type="number"
+            min="1"
+            step="1"
+            placeholder="Price $"
+            value={form.price}
+            onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
+            className="w-24 bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            autoFocus
+            required
+          />
+          <select
+            value={form.stops}
+            onChange={e => setForm(f => ({ ...f, stops: e.target.value }))}
+            className="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs text-white focus:outline-none"
+          >
+            <option value="nonstop">Nonstop</option>
+            <option value="1 stop">1 stop</option>
+            <option value="2 stops">2 stops</option>
+          </select>
+          <input
+            type="text"
+            placeholder="Notes (optional)"
+            value={form.notes}
+            onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+            className="flex-1 bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          />
+          <button type="submit" disabled={saving} className="text-emerald-400 hover:text-emerald-300">
+            <Check size={14} />
+          </button>
+          <button type="button" onClick={() => setLogging(false)} className="text-neutral-600 hover:text-neutral-400">
+            <X size={14} />
+          </button>
+        </form>
+      ) : (
+        <button
+          onClick={() => setLogging(true)}
+          className="flex items-center gap-1.5 text-xs text-neutral-600 hover:text-neutral-300 transition-colors"
+        >
+          <PlusCircle size={12} />
+          Log a price manually
+        </button>
+      )}
+
       {/* Price history table */}
       {watch.history.length > 0 && (
         <div>
@@ -105,20 +193,25 @@ function WatchCard({ watch }: { watch: TravelWatch }) {
               </thead>
               <tbody className="divide-y divide-neutral-800">
                 {watch.history.map((p) => {
-                  const detailStr = p.details
-                    ? Object.entries(p.details)
-                        .filter(([, v]) => v)
-                        .map(([k, v]) => `${k}: ${v}`)
-                        .join(' · ')
-                    : ''
+                  const stops = p.details?.stops as string | undefined
+                  const notes = p.details?.notes as string | undefined
+                  const source = p.details?.source as string | undefined
+                  const detailParts = [
+                    p.details?.type,
+                    notes,
+                    source === 'manual' ? 'manual' : undefined,
+                  ].filter(Boolean).join(' · ')
                   return (
                     <tr key={p.id} className="bg-neutral-950 hover:bg-neutral-900 transition-colors">
                       <td className="px-3 py-2 text-neutral-400">{fmtDate(p.checked_at)}</td>
-                      <td className={`px-3 py-2 text-right font-medium ${meta.color}`}>
-                        {fmtPrice(p.price)}
+                      <td className="px-3 py-2 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {stops && stopsBadge(stops)}
+                          <span className={`font-medium ${meta.color}`}>{fmtPrice(p.price)}</span>
+                        </div>
                       </td>
                       <td className="px-3 py-2 text-neutral-600 text-xs truncate max-w-[180px]">
-                        {detailStr || '—'}
+                        {detailParts || '—'}
                       </td>
                     </tr>
                   )
@@ -197,7 +290,7 @@ export default function TravelPage() {
       ) : (
         <div className="grid gap-6 sm:grid-cols-2">
           {watches.map((w) => (
-            <WatchCard key={w.id} watch={w} />
+            <WatchCard key={w.id} watch={w} onPriceLogged={load} />
           ))}
         </div>
       )}
