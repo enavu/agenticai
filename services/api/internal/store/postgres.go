@@ -64,6 +64,11 @@ CREATE TABLE IF NOT EXISTS workouts (
 
 CREATE UNIQUE INDEX IF NOT EXISTS workouts_class_date_name_idx ON workouts(class_date, class_name, instructor);
 
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS posts (
     id                TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     caption           TEXT NOT NULL,
@@ -268,7 +273,7 @@ func (s *Store) GetWorkoutStats(ctx context.Context) (*models.WorkoutStats, erro
 	var stats models.WorkoutStats
 	err := s.pool.QueryRow(ctx, `
 		SELECT
-		    COUNT(*)::int,
+		    (COUNT(*)::int + COALESCE((SELECT value::int FROM settings WHERE key='workout_ride_offset'), 0)),
 		    COALESCE(SUM(cals_burned), 0)::int,
 		    COALESCE(SUM(duration_minutes), 0)::int,
 		    COALESCE(AVG(cals_burned), 0)::float,

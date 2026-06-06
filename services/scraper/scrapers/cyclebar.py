@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 CYCLEBAR_LOGIN_URL = "https://members.cyclebar.com/auth/login"
 ATTENDANCE_URL = "https://members.cyclebar.com/history/attendance"
+STUDIO_SLUGS = ["cyclebar-lohi", "cyclebar-dtc"]
 
 
 async def scrape_workouts(username: str, password: str) -> list[dict]:
@@ -63,23 +64,36 @@ async def _do_scrape(page: Page, username: str, password: str) -> list[dict]:
 
     logger.info(f"Logged in, at: {page.url}")
 
-    # Navigate directly to the unfiltered attendance page (all studios)
-    await page.goto(ATTENDANCE_URL, wait_until="domcontentloaded", timeout=30_000)
-    await page.wait_for_selector("nav", timeout=10_000)
-    logger.info(f"Attendance page: {page.url}")
+    # Scrape each studio separately and merge (dedup by date+class+instructor key)
+    seen: set[str] = set()
+    all_workouts: list[dict] = []
 
-    # Wait for the attendance table to appear
-    try:
-        await page.wait_for_selector("tbody.rows-in tr, tr.no-animate", timeout=20_000)
-    except PlaywrightTimeout:
-        logger.warning("Attendance table not found within timeout")
+    for slug in STUDIO_SLUGS:
+        url = f"{ATTENDANCE_URL}/{slug}"
+        logger.info(f"Scraping studio: {slug}")
+        await page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+        await page.wait_for_selector("nav", timeout=10_000)
+        logger.info(f"Studio page URL: {page.url}")
 
-    # Scroll to load all rows (infinite scroll)
-    await _scroll_to_bottom(page)
+        try:
+            await page.wait_for_selector("tbody.rows-in tr, tr.no-animate", timeout=20_000)
+        except PlaywrightTimeout:
+            logger.warning(f"Attendance table not found for {slug}")
+            continue
 
-    workouts = await _parse_attendance_table(page)
-    logger.info(f"Scraped {len(workouts)} workouts")
-    return workouts
+        await _scroll_to_bottom(page)
+        workouts = await _parse_attendance_table(page)
+        logger.info(f"Studio {slug}: {len(workouts)} rows")
+
+        for w in workouts:
+            key = f"{w['class_date']}|{w['class_name']}|{w['instructor']}"
+            if key not in seen:
+                seen.add(key)
+                all_workouts.append(w)
+
+    logger.info(f"Total after merging studios: {len(all_workouts)}")
+    return all_workouts
+
 
 
 async def _scroll_to_bottom(page: Page, max_rounds: int = 300) -> None:
@@ -103,12 +117,12 @@ async def _scroll_to_bottom(page: Page, max_rounds: int = 300) -> None:
                 return rows.length;
             }
         """)
-        await asyncio.sleep(1.5)
+        await asyncio.sleep(2.5)
 
         if row_count == prev_count:
             stale_rounds += 1
-            if stale_rounds >= 6:
-                break  # No new rows after 3 consecutive rounds — we're done
+            if stale_rounds >= 15:
+                break  # No new rows after 15 consecutive rounds — we're done
         else:
             stale_rounds = 0
             logger.info(f"Scroll: {prev_count} → {row_count} rows")
@@ -131,8 +145,8 @@ async def _parse_attendance_table(page: Page) -> list[dict]:
                 const classCell = tds[2];
                 const strong = classCell.querySelector('strong');
                 const subDiv = classCell.querySelector('div');
-                const className = strong ? strong.innerText.trim() : '';
-                const subtype = subDiv ? subDiv.innerText.trim() : '';
+                const className = strong ? strong.innerText.trim() : classCell.innerText.trim().split('\\n')[0].trim();
+                const subtype = subDiv && subDiv !== strong ? subDiv.innerText.trim() : '';
 
                 const calsEl = tds[3].querySelector('h5.text-primary');
                 const cals = calsEl ? calsEl.innerText.trim() : null;
@@ -142,8 +156,8 @@ async def _parse_attendance_table(page: Page) -> list[dict]:
                     time: tds[1].innerText.trim(),
                     class_name: subtype ? className + ' — ' + subtype : className,
                     cals: cals,
-                    studio: tds[5].innerText.trim(),
-                    instructor: tds[6].innerText.trim(),
+                    studio: tds.length > 5 ? tds[5].innerText.trim() : '',
+                    instructor: tds.length > 6 ? tds[6].innerText.trim() : '',
                 };
             }).filter(r => r !== null && r.class_name);
         }
