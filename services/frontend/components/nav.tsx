@@ -114,7 +114,7 @@ export function Nav() {
 
       {/* Mobile bottom tab bar */}
       <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-neutral-800 bg-neutral-950">
-        <div className="flex">
+        <div className="flex overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {links.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(href + '/')
             return (
@@ -122,7 +122,7 @@ export function Nav() {
                 key={href}
                 href={href}
                 className={clsx(
-                  'flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] transition-colors',
+                  'flex shrink-0 flex-col items-center justify-center gap-0.5 py-2 px-3 min-w-[60px] text-[10px] transition-colors',
                   active ? 'text-white' : 'text-neutral-500'
                 )}
               >

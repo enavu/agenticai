@@ -4,11 +4,17 @@ import { api } from '@/lib/api'
 import {
   Flame, Clock, Trophy, TrendingUp, Cpu, Brain,
   CheckCircle, AlertCircle, Plane, Ticket, Lock,
-  Zap, Calendar, Target, Wifi, Sparkles,
+  Zap, Calendar, Target, Wifi, Sparkles, Thermometer,
 } from 'lucide-react'
 
 async function getData() {
-  const [workoutsRes, healthRes, insightRes, energyRes] = await Promise.allSettled([
+  const haBase = 'http://10.99.13.198:8123/api/states'
+  const haToken = process.env.HA_TOKEN ?? ''
+  const haFetch = (entity: string) =>
+    fetch(`${haBase}/${entity}`, { headers: { Authorization: `Bearer ${haToken}` }, cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null).catch(() => null)
+
+  const [workoutsRes, healthRes, insightRes, energyRes, tempRes, humidRes] = await Promise.allSettled([
     api.workouts.list(),
     api.health(),
     api.workouts.insights(),
@@ -16,12 +22,16 @@ async function getData() {
       (process.env.API_URL || 'http://api:8080') + '/api/v1/home/energy?history=false',
       { cache: 'no-store' }
     ).then(r => r.ok ? r.json() : null).catch(() => null),
+    haFetch('sensor.milan_temp_temperature'),
+    haFetch('sensor.milan_temp_humidity'),
   ])
   return {
     workouts: workoutsRes.status === 'fulfilled' ? workoutsRes.value : null,
     health: healthRes.status === 'fulfilled' ? healthRes.value : null,
     insight: insightRes.status === 'fulfilled' ? insightRes.value : null,
     energy: energyRes.status === 'fulfilled' ? energyRes.value : null,
+    officeTemp: tempRes.status === 'fulfilled' ? tempRes.value : null,
+    officeHumid: humidRes.status === 'fulfilled' ? humidRes.value : null,
   }
 }
 
@@ -44,7 +54,7 @@ function getEnergyQuip(energy: any): string | null {
 }
 
 export default async function DashboardPage() {
-  const { workouts, health, insight, energy } = await getData()
+  const { workouts, health, insight, energy, officeTemp, officeHumid } = await getData()
 
   const stats = workouts?.stats
   const patterns = insight?.patterns
@@ -225,6 +235,16 @@ export default async function DashboardPage() {
           <StatCard icon={<Wifi size={18} className="text-blue-400" />} label="Automations" value="Active" />
           <StatCard icon={<Zap size={18} className="text-yellow-400" />} label="Energy Monitor" value="18 circuits" />
           <StatCard icon={<Brain size={18} className="text-violet-400" />} label="AI Snapshots" value="Every 15m" />
+          {officeTemp && (
+            <div className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Thermometer size={18} className="text-orange-400" />
+                <p className="text-xs text-neutral-400">Home Office</p>
+              </div>
+              <p className="text-2xl font-bold text-white">{parseFloat(officeTemp.state).toFixed(1)}°F</p>
+              {officeHumid && <p className="text-xs text-neutral-500 mt-0.5">{parseFloat(officeHumid.state).toFixed(0)}% humidity</p>}
+            </div>
+          )}
         </div>
         <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 space-y-3">
           <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">Observed patterns</p>

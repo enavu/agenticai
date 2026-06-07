@@ -274,8 +274,8 @@ func (s *Store) GetWorkoutStats(ctx context.Context) (*models.WorkoutStats, erro
 	err := s.pool.QueryRow(ctx, `
 		SELECT
 		    (COUNT(*)::int + COALESCE((SELECT value::int FROM settings WHERE key='workout_ride_offset'), 0)),
-		    COALESCE(SUM(cals_burned), 0)::int,
-		    COALESCE(SUM(duration_minutes), 0)::int,
+		    (COALESCE(SUM(cals_burned), 0)::int + COALESCE((SELECT value::int FROM settings WHERE key='calorie_offset'), 0)),
+		    (COALESCE(SUM(duration_minutes), 0)::int + COALESCE((SELECT value::int FROM settings WHERE key='minutes_offset'), 0)),
 		    COALESCE(AVG(cals_burned), 0)::float,
 		    COALESCE(MIN(class_date), NOW()),
 		    COALESCE(MAX(class_date), NOW()),
