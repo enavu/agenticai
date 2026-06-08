@@ -169,19 +169,11 @@ export default async function DashboardPage() {
       <section>
         <h2 className="mb-3 text-sm font-medium text-neutral-400 uppercase tracking-wide">Fitness</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-4">
-          <StatCard icon={<Trophy size={18} className="text-yellow-400" />} label="Total Rides" value={stats?.total_workouts?.toString() ?? '—'} />
-          <StatCard icon={<Flame size={18} className="text-orange-400" />} label="Total Calories" value={stats?.total_calories ? stats.total_calories.toLocaleString() : '—'} />
           <StatCard icon={<Clock size={18} className="text-blue-400" />} label="Hours on Bike" value={stats?.total_minutes ? `${Math.round(stats.total_minutes / 60)}h` : '—'} />
           <StatCard icon={<TrendingUp size={18} className="text-purple-400" />} label="This Month" value={stats?.workouts_this_month?.toString() ?? '—'} />
+          {patterns && <StatCard icon={<Target size={18} className="text-emerald-400" />} label="Current Streak" value={`${patterns.current_streak}d`} />}
+          {patterns && <StatCard icon={<Calendar size={18} className="text-amber-400" />} label="Avg Gap" value={`${patterns.avg_days_between_workouts.toFixed(1)}d`} />}
         </div>
-
-        {patterns && (
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <PatternCard icon={<Target size={16} className="text-emerald-400" />} label="Current Streak" value={`${patterns.current_streak}d`} sub={patterns.current_streak >= 5 ? 'Keep it up' : patterns.current_streak === 0 ? 'Time to ride' : 'Building'} color="emerald" />
-            <PatternCard icon={<Calendar size={16} className="text-amber-400" />} label="Days Missed" value={patterns.days_missed_this_month.toString()} sub="this month" color={patterns.days_missed_this_month > 15 ? 'red' : 'amber'} />
-            <PatternCard icon={<Zap size={16} className="text-blue-400" />} label="Avg Gap" value={`${patterns.avg_days_between_workouts.toFixed(1)}d`} sub="between sessions" color="blue" />
-          </div>
-        )}
       </section>
 
       {/* Travel intelligence */}
